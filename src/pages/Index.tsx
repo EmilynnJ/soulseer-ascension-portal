@@ -1,14 +1,10 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+// This page is no longer used as the main route now goes to Home.tsx
+// Keeping for legacy compatibility
+
+import { Navigate } from 'react-router-dom';
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  return <Navigate to="/" replace />;
 };
 
 export default Index;

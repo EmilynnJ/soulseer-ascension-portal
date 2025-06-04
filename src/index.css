@@ -4,51 +4,45 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* SoulSeer mystical theme */
+    --background: 0 0% 8%;
+    --foreground: 315 100% 95%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 315 20% 12%;
+    --card-foreground: 315 100% 95%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 315 20% 12%;
+    --popover-foreground: 315 100% 95%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 315 100% 70%;
+    --primary-foreground: 315 20% 12%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 315 20% 20%;
+    --secondary-foreground: 315 100% 95%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 315 20% 16%;
+    --muted-foreground: 315 20% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 45 100% 60%;
+    --accent-foreground: 315 20% 12%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 315 100% 95%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 315 20% 20%;
+    --input: 315 20% 16%;
+    --ring: 315 100% 70%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 315 25% 10%;
+    --sidebar-foreground: 315 100% 95%;
+    --sidebar-primary: 315 100% 70%;
+    --sidebar-primary-foreground: 315 20% 12%;
+    --sidebar-accent: 315 20% 16%;
+    --sidebar-accent-foreground: 315 100% 95%;
+    --sidebar-border: 315 20% 20%;
+    --sidebar-ring: 315 100% 70%;
   }
 
   .dark {
@@ -97,5 +91,48 @@
 
   body {
     @apply bg-background text-foreground;
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a0f1a 50%, #0f0a1a 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glow-mystic {
+    box-shadow: 0 0 20px rgba(212, 70, 239, 0.3), 0 0 40px rgba(212, 70, 239, 0.1);
+  }
+  
+  .glow-divine {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3), 0 0 40px rgba(245, 158, 11, 0.1);
+  }
+  
+  .text-gradient-mystic {
+    background: linear-gradient(135deg, #d946ef, #f43f5e, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .sparkle {
+    position: relative;
+  }
+  
+  .sparkle::before {
+    content: '✨';
+    position: absolute;
+    animation: sparkle 2s ease-in-out infinite;
+  }
+  
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  .float {
+    animation: float 3s ease-in-out infinite;
   }
 }
