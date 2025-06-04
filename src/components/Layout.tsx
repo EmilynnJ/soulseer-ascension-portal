@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Star, Moon, Sun } from 'lucide-react';
+import BackgroundGenerator from './BackgroundGenerator';
 
 interface LayoutProps {
   children: ReactNode;
@@ -119,6 +120,9 @@ const Layout = ({ children }: LayoutProps) => {
           </div>
         </div>
       </footer>
+      
+      {/* Background Generator */}
+      <BackgroundGenerator />
     </div>
   );
 };
