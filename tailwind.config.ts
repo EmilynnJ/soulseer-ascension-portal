@@ -18,6 +18,12 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				'heading': ['Alex Brush', 'cursive'],
+				'body': ['Playfair Display', 'serif'],
+				'display': ['Alex Brush', 'cursive'],
+				'sans': ['Playfair Display', 'serif'],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -62,7 +68,7 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// SoulSeer mystical theme colors
+				// SoulSeer ethereal mystical theme colors
 				mystic: {
 					50: '#fdf4ff',
 					100: '#fae8ff',
@@ -101,6 +107,19 @@ export default {
 					800: '#92400e',
 					900: '#78350f',
 					950: '#451a03',
+				},
+				ethereal: {
+					50: '#ffffff',
+					100: '#fef7ff',
+					200: '#fdeeff',
+					300: '#fce5ff',
+					400: '#f9d0ff',
+					500: '#f4b8ff',
+					600: '#e89cff',
+					700: '#d775ff',
+					800: '#c247ff',
+					900: '#a819ff',
+					950: '#7c0a9a',
 				}
 			},
 			borderRadius: {

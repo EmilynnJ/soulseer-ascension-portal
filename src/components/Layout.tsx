@@ -21,27 +21,27 @@ const Layout = ({ children }: LayoutProps) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-mystic-950 to-black">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-mystic-950 to-black relative">
       {/* Navigation */}
-      <nav className="border-b border-mystic-800/30 bg-black/20 backdrop-blur-xl">
+      <nav className="ethereal-border border-b backdrop-blur-xl relative z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-18">
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2">
-              <Star className="h-8 w-8 text-mystic-400 glow-mystic" />
-              <span className="text-xl font-bold text-gradient-mystic">SoulSeer</span>
+            <Link to="/" className="flex items-center space-x-3 group">
+              <Star className="h-10 w-10 text-mystic-400 glow-ethereal float group-hover:scale-110 transition-transform duration-300" />
+              <span className="font-heading text-3xl text-gradient-ethereal">SoulSeer</span>
             </Link>
 
             {/* Navigation Links */}
-            <div className="hidden md:flex space-x-8">
+            <div className="hidden md:flex space-x-6">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`px-4 py-2 rounded-lg font-body text-sm font-medium transition-all duration-300 ${
                     location.pathname === item.href
-                      ? 'text-mystic-400 glow-mystic bg-mystic-900/20'
-                      : 'text-gray-300 hover:text-mystic-400 hover:bg-mystic-900/10'
+                      ? 'text-mystic-400 glow-ethereal bg-mystic-900/30 ethereal-border'
+                      : 'text-gray-300 hover:text-ethereal-300 hover:bg-mystic-900/20 hover:glow-mystic'
                   }`}
                 >
                   {item.name}
@@ -52,13 +52,13 @@ const Layout = ({ children }: LayoutProps) => {
             {/* Auth Buttons */}
             <div className="flex items-center space-x-4">
               <Link to="/login">
-                <Button variant="ghost" className="text-gray-300 hover:text-mystic-400">
+                <Button variant="ghost" className="font-body text-gray-300 hover:text-ethereal-300 hover:glow-mystic transition-all duration-300">
                   Login
                 </Button>
               </Link>
               <Link to="/signup">
-                <Button className="bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 text-white glow-mystic">
-                  Get Started
+                <Button className="mystical-card bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 text-white glow-ethereal font-body transition-all duration-500 hover:scale-105">
+                  Get Started ✨
                 </Button>
               </Link>
             </div>
