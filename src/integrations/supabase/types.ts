@@ -9,118 +9,124 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      comments: {
+      reading_sessions: {
         Row: {
-          content: string
+          client_id: string | null
           created_at: string | null
+          duration_minutes: number | null
+          end_time: string | null
           id: string
-          post_id: string
-          updated_at: string | null
-          user_id: string
+          rate_per_minute: number
+          reader_id: string | null
+          start_time: string | null
+          status: string | null
+          total_cost: number | null
+          type: string | null
         }
         Insert: {
-          content: string
+          client_id?: string | null
           created_at?: string | null
+          duration_minutes?: number | null
+          end_time?: string | null
           id?: string
-          post_id: string
-          updated_at?: string | null
-          user_id: string
+          rate_per_minute: number
+          reader_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          total_cost?: number | null
+          type?: string | null
         }
         Update: {
-          content?: string
+          client_id?: string | null
           created_at?: string | null
+          duration_minutes?: number | null
+          end_time?: string | null
           id?: string
-          post_id?: string
-          updated_at?: string | null
-          user_id?: string
+          rate_per_minute?: number
+          reader_id?: string | null
+          start_time?: string | null
+          status?: string | null
+          total_cost?: number | null
+          type?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "comments_post_id_fkey"
-            columns: ["post_id"]
+            foreignKeyName: "reading_sessions_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "posts"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "comments_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "reading_sessions_reader_id_fkey"
+            columns: ["reader_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
       }
-      likes: {
+      user_profiles: {
         Row: {
+          avatar_url: string | null
+          balance: number | null
+          bio: string | null
           created_at: string | null
+          full_name: string | null
           id: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "likes_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "likes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      posts: {
-        Row: {
-          comments_count: number | null
-          content: string
-          created_at: string | null
-          id: string
-          image_url: string | null
-          likes_count: number | null
+          is_online: boolean | null
+          per_minute_rate_chat: number | null
+          per_minute_rate_phone: number | null
+          per_minute_rate_video: number | null
+          phone: string | null
+          rating: number | null
+          specialties: string[] | null
+          timezone: string | null
+          total_reviews: number | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
-          comments_count?: number | null
-          content: string
+          avatar_url?: string | null
+          balance?: number | null
+          bio?: string | null
           created_at?: string | null
+          full_name?: string | null
           id?: string
-          image_url?: string | null
-          likes_count?: number | null
+          is_online?: boolean | null
+          per_minute_rate_chat?: number | null
+          per_minute_rate_phone?: number | null
+          per_minute_rate_video?: number | null
+          phone?: string | null
+          rating?: number | null
+          specialties?: string[] | null
+          timezone?: string | null
+          total_reviews?: number | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
-          comments_count?: number | null
-          content?: string
+          avatar_url?: string | null
+          balance?: number | null
+          bio?: string | null
           created_at?: string | null
+          full_name?: string | null
           id?: string
-          image_url?: string | null
-          likes_count?: number | null
+          is_online?: boolean | null
+          per_minute_rate_chat?: number | null
+          per_minute_rate_phone?: number | null
+          per_minute_rate_video?: number | null
+          phone?: string | null
+          rating?: number | null
+          specialties?: string[] | null
+          timezone?: string | null
+          total_reviews?: number | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "posts_user_id_fkey"
+            foreignKeyName: "user_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -130,40 +136,28 @@ export type Database = {
       }
       users: {
         Row: {
-          avatar_url: string | null
-          bio: string | null
           created_at: string | null
           email: string
-          full_name: string
           id: string
-          is_online: boolean | null
+          password_hash: string
           role: string | null
           updated_at: string | null
-          username: string
         }
         Insert: {
-          avatar_url?: string | null
-          bio?: string | null
           created_at?: string | null
           email: string
-          full_name: string
-          id: string
-          is_online?: boolean | null
+          id?: string
+          password_hash: string
           role?: string | null
           updated_at?: string | null
-          username: string
         }
         Update: {
-          avatar_url?: string | null
-          bio?: string | null
           created_at?: string | null
           email?: string
-          full_name?: string
           id?: string
-          is_online?: boolean | null
+          password_hash?: string
           role?: string | null
           updated_at?: string | null
-          username?: string
         }
         Relationships: []
       }
