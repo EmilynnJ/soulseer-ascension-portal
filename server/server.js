@@ -16,6 +16,8 @@ import sessionRoutes from './routes/sessionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { initSocket } from './services/socketService.js';
 import { initializeSupabase } from './config/supabase.js';
+import { pool } from './config/db.js';
+import bcrypt from 'bcryptjs';
 
 // Load environment variables
 dotenv.config();

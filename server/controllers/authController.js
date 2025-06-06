@@ -18,7 +18,8 @@ export const registerUser = async (req, res, next) => {
   const client = await pool.connect();
   
   try {
-    const { email, password, firstName, lastName, phoneNumber, dateOfBirth, role = 'client' } = req.body;
+    const { email, password, firstName, lastName, phoneNumber, dateOfBirth } = req.body;
+    const role = 'client'; // Force role to 'client' for public registration
 
     await client.query('BEGIN');
 

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import RoleBasedNav from '@/components/RoleBasedNav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Star, Calendar, Users, Video } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Star, Calendar, Users, Video, Wallet, DollarSign } from 'lucide-react';
 
 const Dashboard = () => {
   // In a real app, this would come from auth context/state
@@ -92,51 +93,104 @@ const ClientDashboard = ({ userName }: { userName: string }) => (
       </Card>
     </div>
 
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <Card className="bg-black/20 border-mystic-800/30">
-        <CardHeader>
-          <CardTitle className="text-gradient-mystic">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button className="w-full bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 glow-mystic">
-            <Calendar className="mr-2 h-4 w-4" />
-            Book a Reading
-          </Button>
-          <Button variant="outline" className="w-full border-mystic-400 text-mystic-400 hover:bg-mystic-400 hover:text-black">
-            <Video className="mr-2 h-4 w-4" />
-            Start Live Session
-          </Button>
-          <Button variant="outline" className="w-full border-divine-400 text-divine-400 hover:bg-divine-400 hover:text-black">
-            <Users className="mr-2 h-4 w-4" />
-            Browse Readers
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <Card className="bg-black/20 border-mystic-800/30">
+          <CardHeader>
+            <CardTitle className="text-gradient-mystic">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button className="w-full bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 glow-mystic">
+              <Calendar className="mr-2 h-4 w-4" />
+              Book a Reading
+            </Button>
+            <Button variant="outline" className="w-full border-mystic-400 text-mystic-400 hover:bg-mystic-400 hover:text-black">
+              <Video className="mr-2 h-4 w-4" />
+              Start Live Session
+            </Button>
+            <Button variant="outline" className="w-full border-divine-400 text-divine-400 hover:bg-divine-400 hover:text-black">
+              <Users className="mr-2 h-4 w-4" />
+              Browse Readers
+            </Button>
+          </CardContent>
+        </Card>
 
-      <Card className="bg-black/20 border-mystic-800/30">
-        <CardHeader>
-          <CardTitle className="text-gradient-mystic">Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-mystic-400 rounded-full"></div>
-              <p className="text-gray-300 text-sm">Completed reading with Luna Star</p>
+        <Card className="bg-black/20 border-mystic-800/30">
+          <CardHeader>
+            <CardTitle className="text-gradient-mystic">Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-mystic-400 rounded-full"></div>
+                <p className="text-gray-300 text-sm">Completed reading with Luna Star</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-celestial-400 rounded-full"></div>
+                <p className="text-gray-300 text-sm">New message from Crystal Moon</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-divine-400 rounded-full"></div>
+                <p className="text-gray-300 text-sm">Booked session for tomorrow</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-celestial-400 rounded-full"></div>
-              <p className="text-gray-300 text-sm">New message from Crystal Moon</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-divine-400 rounded-full"></div>
-              <p className="text-gray-300 text-sm">Booked session for tomorrow</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="lg:col-span-1">
+        <WalletCard balance={125.50} />
+      </div>
     </div>
   </div>
 );
+
+const WalletCard = ({ balance }: { balance: number }) => {
+  const [amount, setAmount] = useState('');
+
+  const handleAddFunds = () => {
+    // TODO: Implement Stripe payment flow
+    console.log(`Adding funds: $${amount}`);
+  };
+
+  return (
+    <Card className="bg-gradient-to-br from-mystic-900 to-divine-900/90 border-mystic-800/30 hover:glow-mystic transition-all duration-300 h-full flex flex-col">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-gradient-mystic flex items-center">
+            <Wallet className="mr-2 h-5 w-5" /> Your Wallet
+          </CardTitle>
+          <div className="text-2xl font-bold text-white flex items-center">
+            <DollarSign className="h-5 w-5 text-green-400" />
+            {balance.toFixed(2)}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow flex flex-col justify-between">
+        <p className="text-gray-400 text-sm mb-4">Add funds to your account for readings.</p>
+        <div className="space-y-2">
+            <label htmlFor="amount" className="text-xs text-gray-500">Amount (USD)</label>
+            <div className="flex items-center space-x-2">
+                <Input 
+                    id="amount"
+                    type="number"
+                    placeholder="e.g., 50"
+                    className="bg-black/30 border-mystic-700 text-white placeholder:text-gray-500 focus:ring-mystic-500"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    />
+                <Button 
+                    className="bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 glow-mystic shrink-0"
+                    onClick={handleAddFunds}
+                    disabled={!amount || parseFloat(amount) <= 0}
+                    >
+                    Add Funds
+                </Button>
+            </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const ReaderDashboard = () => (
   <div>
