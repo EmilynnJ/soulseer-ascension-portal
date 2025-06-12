@@ -1,151 +1,210 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Star, Moon } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2 } from 'lucide-react';
+
+const signupSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string(),
+  termsAccepted: z.boolean().refine(val => val === true, {
+    message: 'You must accept the terms and conditions',
+  }),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword'],
+});
+
+type SignupFormValues = z.infer<typeof signupSchema>;
 
 const Signup = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    displayName: '',
-    role: 'client'
-  });
   const navigate = useNavigate();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement actual signup logic with Supabase
-    console.log('Signup attempt:', formData);
-    navigate('/welcome');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      termsAccepted: false,
+    },
+  });
+  
+  const onSubmit = async (data: SignupFormValues) => {
+    try {
+      setIsLoading(true);
+      
+      // Create user account
+      const { error: signUpError, data: authData } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            display_name: data.name,
+          },
+        },
+      });
+      
+      if (signUpError) throw signUpError;
+      
+      // Create user profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: authData.user?.id,
+            display_name: data.name,
+            email: data.email,
+            role: 'client', // Default role is client
+            status: 'active',
+            balance: 0,
+            created_at: new Date(),
+          },
+        ]);
+      
+      if (profileError) throw profileError;
+      
+      toast.success('Account created successfully! Please check your email to verify your account.');
+      navigate('/login');
+      
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create account');
+    } finally {
+      setIsLoading(false);
+    }
   };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-mystic-950 to-black flex items-center justify-center px-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <Star className="h-12 w-12 text-mystic-400 glow-mystic float" />
-            <span className="text-3xl font-bold text-gradient-mystic">SoulSeer</span>
-          </div>
-          <p className="text-gray-400">Begin your spiritual awakening</p>
-        </div>
-
-        <Card className="bg-black/30 border-mystic-800/30 backdrop-blur-xl glow-mystic">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl text-gradient-mystic">Create Account</CardTitle>
-            <CardDescription className="text-gray-400">
-              Join our mystical community of seekers and guides
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="displayName" className="text-gray-300">Display Name</Label>
-                <Input
-                  id="displayName"
-                  type="text"
-                  value={formData.displayName}
-                  onChange={(e) => handleInputChange('displayName', e.target.value)}
-                  className="bg-mystic-900/20 border-mystic-800/50 text-white focus:border-mystic-400"
-                  placeholder="Choose your mystical name"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-300">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="bg-mystic-900/20 border-mystic-800/50 text-white focus:border-mystic-400"
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-300">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="bg-mystic-900/20 border-mystic-800/50 text-white focus:border-mystic-400"
-                  placeholder="Create a strong password"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-gray-300">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                  className="bg-mystic-900/20 border-mystic-800/50 text-white focus:border-mystic-400"
-                  placeholder="Confirm your password"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role" className="text-gray-300">Join as</Label>
-                <Select onValueChange={(value) => handleInputChange('role', value)} defaultValue="client">
-                  <SelectTrigger className="bg-mystic-900/20 border-mystic-800/50 text-white">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-mystic-900 border-mystic-800">
-                    <SelectItem value="client" className="text-white hover:bg-mystic-800">
-                      Seeker (Client)
-                    </SelectItem>
-                    <SelectItem value="reader" className="text-white hover:bg-mystic-800">
-                      Spiritual Guide (Reader)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 text-white glow-mystic"
-              >
-                Create Account
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <div className="text-gray-400 text-sm">
-                Already have an account?{' '}
-                <Link to="/login" className="text-mystic-400 hover:text-mystic-300 font-medium">
-                  Sign in here
-                </Link>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="text-center mt-8">
-          <Moon className="h-8 w-8 text-celestial-400 mx-auto mb-2 float" />
-          <p className="text-gray-500 text-sm">
-            Your spiritual adventure begins now ✨
-          </p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4 py-12">
+      <div className="absolute inset-0 z-0">
+        <img 
+          src="https://i.postimg.cc/sXdsKGTK/DALL-E-2025-06-06-14-36-29-A-vivid-ethereal-background-image-designed-for-a-psychic-reading-app.webp" 
+          alt="Background" 
+          className="w-full h-full object-cover opacity-20"
+        />
       </div>
+      
+      <Card className="w-full max-w-md bg-gray-800/80 backdrop-blur-sm border-gray-700 relative z-10">
+        <CardHeader className="text-center">
+          <CardTitle className="font-['Alex_Brush'] text-4xl text-pink-500">Join SoulSeer</CardTitle>
+          <CardDescription className="font-['Playfair_Display'] text-gray-300">
+            Create an account to begin your spiritual journey
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                placeholder="Your Name"
+                className="bg-gray-700 border-gray-600"
+                {...register('name')}
+              />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name.message}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="your@email.com"
+                className="bg-gray-700 border-gray-600"
+                {...register('email')}
+              />
+              {errors.email && (
+                <p className="text-sm text-red-500">{errors.email.message}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                className="bg-gray-700 border-gray-600"
+                {...register('password')}
+              />
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password.message}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="••••••••"
+                className="bg-gray-700 border-gray-600"
+                {...register('confirmPassword')}
+              />
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+              )}
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox id="termsAccepted" {...register('termsAccepted')} />
+              <Label htmlFor="termsAccepted" className="text-sm">
+                I agree to the{' '}
+                <Link to="/terms" className="text-pink-400 hover:text-pink-300">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" className="text-pink-400 hover:text-pink-300">
+                  Privacy Policy
+                </Link>
+              </Label>
+            </div>
+            {errors.termsAccepted && (
+              <p className="text-sm text-red-500">{errors.termsAccepted.message}</p>
+            )}
+            
+            <Button 
+              type="submit" 
+              className="w-full bg-pink-600 hover:bg-pink-700"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                'Create Account'
+              )}
+            </Button>
+          </form>
+        </CardContent>
+        
+        <CardFooter className="flex flex-col space-y-4">
+          <div className="text-center text-sm text-gray-400">
+            Already have an account?{' '}
+            <Link to="/login" className="text-pink-400 hover:text-pink-300">
+              Sign in
+            </Link>
+          </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 };
