@@ -1,100 +1,89 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Layout from "./components/Layout";
-import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Welcome from "./pages/Welcome";
-import NotFound from "./pages/NotFound";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { ThemeProvider } from '@/components/theme-provider';
+import Layout from '@/components/Layout';
+import Home from '@/pages/Home';
+import Login from '@/pages/Login';
+import Signup from '@/pages/Signup';
+import Dashboard from '@/pages/Dashboard';
+import ReadingPage from '@/pages/reading/ReadingPage';
+import LiveStreamPage from '@/pages/live/LiveStreamPage';
+import NotFound from '@/pages/NotFound';
+import { WebRTCProvider } from '@/contexts/WebRTCContext';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
-const queryClient = new QueryClient();
+// Auth guard component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsAuthenticated(!!data.session);
+    };
+    
+    checkAuth();
+    
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session);
+    });
+    
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+  
+  if (isAuthenticated === null) {
+    // Still checking auth state
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+  
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+};
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Auth routes without layout */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/welcome" element={<Welcome />} />
-          <Route path="/dashboard/*" element={<Dashboard />} />
-          
-          {/* Main routes with layout */}
-          <Route path="/" element={
-            <Layout>
-              <Home />
-            </Layout>
-          } />
-          <Route path="/about" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">About SoulSeer</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/readers" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Reader Directory</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/live" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Live Readings</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/shop" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Mystical Shop</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/community" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Spiritual Community</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/help" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Help Center</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          <Route path="/policies" element={
-            <Layout>
-              <div className="min-h-screen py-20 px-4 text-center">
-                <h1 className="text-4xl font-bold text-gradient-mystic mb-4">Policies</h1>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </Layout>
-          } />
-          
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <ThemeProvider defaultTheme="dark" storageKey="soulseer-theme">
+      <WebRTCProvider>
+        <Router>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Home />} />
+              <Route path="login" element={<Login />} />
+              <Route path="signup" element={<Signup />} />
+              
+              {/* Protected routes */}
+              <Route path="dashboard/*" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              
+              {/* Reading session route */}
+              <Route path="reading/:id" element={
+                <ProtectedRoute>
+                  <ReadingPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Live stream route */}
+              <Route path="live/:id" element={
+                <ProtectedRoute>
+                  <LiveStreamPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* 404 route */}
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </Router>
+        <Toaster position="top-right" richColors />
+      </WebRTCProvider>
+    </ThemeProvider>
+  );
+}
 
 export default App;

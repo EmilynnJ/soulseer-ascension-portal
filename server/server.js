@@ -14,10 +14,9 @@ import userRoutes from './routes/userRoutes.js';
 import readerRoutes from './routes/readerRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import webrtcRoutes from './routes/webrtcRoutes.js';
 import { initSocket } from './services/socketService.js';
-import { initializeSupabase } from './config/supabase.js';
-import { pool } from './config/db.js';
-import bcrypt from 'bcryptjs';
+import Stripe from 'stripe';
 
 // Load environment variables
 dotenv.config();
@@ -35,8 +34,9 @@ const io = new Server(httpServer, {
   },
 });
 
-// Initialize Supabase
-initializeSupabase();
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+app.set('stripe', stripe);
 
 // Initialize Socket Service
 initSocket(io);
@@ -51,6 +51,11 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
+
+// Special handling for Stripe webhooks
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
+// Standard middleware for other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -72,6 +77,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/readers', readerRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/webrtc', webrtcRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -85,7 +91,7 @@ app.use(errorHandler);
 // Start server
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 });
 
 export { app, io };

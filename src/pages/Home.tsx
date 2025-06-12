@@ -1,144 +1,248 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Star, Moon, User, Video, Calendar, Users } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Star, Clock, Video, MessageCircle, Phone } from 'lucide-react';
 
 const Home = () => {
-  const features = [
-    {
-      icon: User,
-      title: 'Expert Readers',
-      description: 'Connect with verified psychic readers and spiritual advisors',
-    },
-    {
-      icon: Video,
-      title: 'Live Sessions',
-      description: 'Real-time chat, voice, and video readings available 24/7',
-    },
-    {
-      icon: Calendar,
-      title: 'Easy Scheduling',
-      description: 'Book sessions that fit your schedule with flexible timing',
-    },
-    {
-      icon: Users,
-      title: 'Spiritual Community',
-      description: 'Join a supportive community of seekers and spiritual enthusiasts',
-    },
-  ];
+  const [onlineReaders, setOnlineReaders] = useState<any[]>([]);
+  const [activeStreams, setActiveStreams] = useState<any[]>([]);
+  const [featuredServices, setFeaturedServices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHomeData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch online readers
+        const { data: readers } = await supabase
+          .from('profiles')
+          .select('id, display_name, profile_image, bio, specialties, rating_avg, chat_rate, audio_rate, video_rate')
+          .eq('role', 'reader')
+          .eq('status', 'online')
+          .order('rating_avg', { ascending: false })
+          .limit(6);
+        
+        setOnlineReaders(readers || []);
+        
+        // Fetch active streams
+        const { data: streams } = await supabase
+          .from('live_streams')
+          .select('id, title, reader_id, viewer_count, thumbnail, profiles(display_name, profile_image)')
+          .eq('status', 'active')
+          .order('viewer_count', { ascending: false })
+          .limit(3);
+        
+        setActiveStreams(streams || []);
+        
+        // Fetch featured services
+        const { data: services } = await supabase
+          .from('products')
+          .select('id, name, description, price, image_url, category')
+          .eq('featured', true)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        
+        setFeaturedServices(services || []);
+        
+      } catch (error) {
+        console.error('Error fetching home data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchHomeData();
+  }, []);
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Hero Section */}
-      <section className="relative py-20 px-4 text-center cosmic-dust">
-        <div className="absolute inset-0 bg-gradient-to-r from-mystic-900/20 to-celestial-900/20 backdrop-blur-sm"></div>
-        <div className="relative max-w-4xl mx-auto">
-          <div className="float-slow mb-8 sparkle">
-            <Moon className="h-20 w-20 text-mystic-400 mx-auto glow-ethereal pulse-ethereal" />
-          </div>
-          <h1 className="font-heading text-6xl md:text-8xl mb-6 text-gradient-ethereal">
-            SoulSeer
-          </h1>
-          <p className="font-body text-2xl md:text-3xl text-ethereal-300 mb-4 italic">
-            A Community of Gifted Psychics
-          </p>
-          <p className="font-body text-lg md:text-xl text-gray-300 mb-8 leading-relaxed max-w-3xl mx-auto">
-            Connect with gifted psychic readers and spiritual guides through our mystical platform. 
-            Discover your path through divine wisdom and celestial insight.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <Link to="/readers">
-              <Button 
-                size="lg" 
-                className="mystical-card bg-gradient-to-r from-mystic-600 to-celestial-600 hover:from-mystic-700 hover:to-celestial-700 text-white px-10 py-4 text-lg glow-mystic font-body transition-all duration-500 hover:scale-105"
-              >
-                Find Your Reader
-              </Button>
-            </Link>
-            <Link to="/live">
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="ethereal-border text-mystic-400 hover:bg-mystic-400 hover:text-black px-10 py-4 text-lg font-body transition-all duration-500 hover:scale-105"
-              >
-                Start Live Reading
-              </Button>
-            </Link>
+      <div className="relative h-[70vh] flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <img 
+            src="https://i.postimg.cc/tRLSgCPb/HERO-IMAGE-1.jpg" 
+            alt="SoulSeer Hero" 
+            className="w-full h-full object-cover opacity-60"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-gray-900"></div>
+        </div>
+        
+        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+          <h1 className="font-['Alex_Brush'] text-6xl md:text-8xl text-pink-500 mb-6">SoulSeer</h1>
+          <p className="font-['Playfair_Display'] text-2xl md:text-3xl text-white mb-8">A Community of Gifted Psychics</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg" className="bg-pink-600 hover:bg-pink-700 text-white">
+              <Link to="/readings">Get a Reading</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="border-pink-500 text-pink-500 hover:bg-pink-950">
+              <Link to="/live">Watch Live</Link>
+            </Button>
           </div>
         </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 px-4 relative">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-heading text-5xl md:text-6xl text-gradient-divine mb-4">
-              Experience Divine Guidance
-            </h2>
-            <p className="font-body text-xl md:text-2xl text-ethereal-200 italic">
-              Discover the magic of spiritual connection through our platform
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <Card key={index} className="mystical-card transition-all duration-500 hover:glow-ethereal group cursor-pointer">
-                <CardContent className="p-8 text-center">
-                  <feature.icon className="h-14 w-14 text-mystic-400 mx-auto mb-6 float group-hover:text-ethereal-400 transition-colors duration-300" />
-                  <h3 className="font-heading text-2xl text-gradient-mystic mb-3">
-                    {feature.title}
-                  </h3>
-                  <p className="font-body text-gray-300 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </CardContent>
-              </Card>
+      </div>
+      
+      {/* Online Readers Section */}
+      <section className="py-16 px-4 max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="font-['Alex_Brush'] text-4xl text-pink-500">Online Now</h2>
+          <Link to="/readings" className="text-pink-400 hover:text-pink-300">View All</Link>
+        </div>
+        
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="bg-gray-800 border-gray-700 h-64 animate-pulse"></Card>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-20 px-4 bg-black/30 backdrop-blur-sm relative">
-        <div className="absolute inset-0 cosmic-dust opacity-50"></div>
-        <div className="max-w-4xl mx-auto text-center relative">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            <div className="mystical-card p-8 group hover:glow-mystic transition-all duration-500">
-              <div className="font-heading text-5xl md:text-6xl text-gradient-ethereal mb-4 group-hover:scale-110 transition-transform duration-300">10,000+</div>
-              <div className="font-body text-lg text-gray-200">Readings Completed</div>
-            </div>
-            <div className="mystical-card p-8 group hover:glow-celestial transition-all duration-500">
-              <div className="font-heading text-5xl md:text-6xl text-gradient-ethereal mb-4 group-hover:scale-110 transition-transform duration-300">500+</div>
-              <div className="font-body text-lg text-gray-200">Verified Readers</div>
-            </div>
-            <div className="mystical-card p-8 group hover:glow-divine transition-all duration-500">
-              <div className="font-heading text-5xl md:text-6xl text-gradient-ethereal mb-4 group-hover:scale-110 transition-transform duration-300">24/7</div>
-              <div className="font-body text-lg text-gray-200">Available Support</div>
-            </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {onlineReaders.map((reader) => (
+              <Link to={`/readers/${reader.id}`} key={reader.id}>
+                <Card className="bg-gray-800 border-gray-700 overflow-hidden hover:border-pink-500 transition-all">
+                  <div className="flex p-4">
+                    <div className="w-20 h-20 rounded-full overflow-hidden mr-4 flex-shrink-0">
+                      <img 
+                        src={reader.profile_image || 'https://via.placeholder.com/80'} 
+                        alt={reader.display_name} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="font-['Playfair_Display'] text-lg font-semibold">{reader.display_name}</h3>
+                      <div className="flex items-center text-yellow-400 mb-2">
+                        <Star className="w-4 h-4 mr-1" />
+                        <span>{reader.rating_avg?.toFixed(1) || '5.0'}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {reader.specialties?.slice(0, 3).map((specialty: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-xs">{specialty}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-900 p-3 flex justify-between items-center">
+                    <div className="flex gap-3">
+                      {reader.chat_rate && (
+                        <div className="flex items-center text-sm">
+                          <MessageCircle className="w-4 h-4 mr-1" />
+                          <span>${(reader.chat_rate / 100).toFixed(2)}/min</span>
+                        </div>
+                      )}
+                      {reader.audio_rate && (
+                        <div className="flex items-center text-sm">
+                          <Phone className="w-4 h-4 mr-1" />
+                          <span>${(reader.audio_rate / 100).toFixed(2)}/min</span>
+                        </div>
+                      )}
+                      {reader.video_rate && (
+                        <div className="flex items-center text-sm">
+                          <Video className="w-4 h-4 mr-1" />
+                          <span>${(reader.video_rate / 100).toFixed(2)}/min</span>
+                        </div>
+                      )}
+                    </div>
+                    <Badge className="bg-green-600">Online</Badge>
+                  </div>
+                </Card>
+              </Link>
+            ))}
           </div>
-        </div>
+        )}
       </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 relative">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="sparkle mb-8 float-slow">
-            <Star className="h-20 w-20 text-divine-400 mx-auto glow-divine pulse-ethereal" />
+      
+      {/* Live Streams Section */}
+      {activeStreams.length > 0 && (
+        <section className="py-16 px-4 max-w-7xl mx-auto bg-gray-800 rounded-lg">
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="font-['Alex_Brush'] text-4xl text-pink-500">Live Now</h2>
+            <Link to="/live" className="text-pink-400 hover:text-pink-300">View All</Link>
           </div>
-          <h2 className="font-heading text-5xl md:text-6xl text-gradient-divine mb-6">
-            Begin Your Spiritual Journey Today
-          </h2>
-          <p className="font-body text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed italic max-w-3xl mx-auto">
-            Join thousands of seekers who have found clarity and purpose through our mystical platform
-          </p>
-          <Link to="/signup">
-            <Button 
-              size="lg" 
-              className="mystical-card bg-gradient-to-r from-divine-600 to-mystic-600 hover:from-divine-700 hover:to-mystic-700 text-white px-12 py-4 text-xl glow-divine font-body transition-all duration-500 hover:scale-110"
-            >
-              Start Your Journey ✨
-            </Button>
-          </Link>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {activeStreams.map((stream) => (
+              <Link to={`/live/${stream.id}`} key={stream.id}>
+                <Card className="bg-gray-900 border-gray-700 overflow-hidden hover:border-pink-500 transition-all">
+                  <div className="relative">
+                    <img 
+                      src={stream.thumbnail || 'https://via.placeholder.com/400x225'} 
+                      alt={stream.title} 
+                      className="w-full h-48 object-cover"
+                    />
+                    <Badge className="absolute top-2 right-2 bg-red-600 flex items-center">
+                      <span className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span>
+                      LIVE
+                    </Badge>
+                    <Badge className="absolute bottom-2 right-2 bg-black/70">
+                      {stream.viewer_count} watching
+                    </Badge>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center mb-2">
+                      <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                        <img 
+                          src={stream.profiles?.profile_image || 'https://via.placeholder.com/32'} 
+                          alt={stream.profiles?.display_name} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <h3 className="font-['Playfair_Display'] text-lg">{stream.profiles?.display_name}</h3>
+                    </div>
+                    <p className="text-gray-300 line-clamp-2">{stream.title}</p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+      
+      {/* Featured Services Section */}
+      {featuredServices.length > 0 && (
+        <section className="py-16 px-4 max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="font-['Alex_Brush'] text-4xl text-pink-500">Featured Services</h2>
+            <Link to="/shop" className="text-pink-400 hover:text-pink-300">Visit Shop</Link>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {featuredServices.map((service) => (
+              <Link to={`/shop/products/${service.id}`} key={service.id}>
+                <Card className="bg-gray-800 border-gray-700 overflow-hidden hover:border-pink-500 transition-all">
+                  <div className="h-48 overflow-hidden">
+                    <img 
+                      src={service.image_url || 'https://via.placeholder.com/400x225'} 
+                      alt={service.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <Badge className="mb-2">{service.category}</Badge>
+                    <h3 className="font-['Playfair_Display'] text-lg mb-2">{service.name}</h3>
+                    <p className="text-gray-300 text-sm mb-4 line-clamp-2">{service.description}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">${(service.price / 100).toFixed(2)}</span>
+                      <Button size="sm" className="bg-pink-600 hover:bg-pink-700">View Details</Button>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+      
+      {/* Call to Action */}
+      <section className="py-16 px-4 bg-gradient-to-r from-pink-900/50 to-purple-900/50">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="font-['Alex_Brush'] text-4xl text-pink-500 mb-4">Begin Your Spiritual Journey</h2>
+          <p className="font-['Playfair_Display'] text-xl mb-8">Connect with our gifted psychics for guidance, clarity, and insight.</p>
+          <Button asChild size="lg" className="bg-pink-600 hover:bg-pink-700 text-white">
+            <Link to="/signup">Join SoulSeer Today</Link>
+          </Button>
         </div>
       </section>
     </div>

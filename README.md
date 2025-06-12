@@ -1,73 +1,99 @@
-# Welcome to your Lovable project
+# SoulSeer - Psychic Reading Platform
 
-## Project info
+SoulSeer is a premium platform connecting spiritual readers with clients seeking guidance. The app embodies a mystical yet professional atmosphere while providing robust functionality for seamless spiritual consultations.
 
-**URL**: https://lovable.dev/projects/73e7c14a-76ac-4e1f-9bc8-ceac7247a0a6
+## Features
 
-## How can I edit this code?
+- **Custom WebRTC System**: End-to-end encrypted real-time communication for chat, audio, and video readings
+- **Pay-Per-Minute Billing**: Secure Stripe integration for per-minute billing with automatic balance management
+- **Live Streaming**: Readers can host live streams with virtual gifting capabilities
+- **Role-Based Access**: Separate interfaces for clients, readers, and administrators
+- **Marketplace**: Shop for digital and physical spiritual products
+- **Community Features**: Forums and messaging system for spiritual discussions
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React (Vite), TailwindCSS, TypeScript
+- **Backend**: Node.js, Express
+- **Database**: PostgreSQL (Neon)
+- **Real-time Communication**: Custom WebRTC implementation
+- **Payment Processing**: Stripe Connect
+- **Authentication**: JWT-based auth system
+- **Hosting**: [Your hosting provider]
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/73e7c14a-76ac-4e1f-9bc8-ceac7247a0a6) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 16+
+- PostgreSQL database (or Neon account)
+- Stripe account with Connect enabled
+- TURN server credentials (for WebRTC NAT traversal)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/soulseer-ascension-portal.git
+   cd soulseer-ascension-portal
+   ```
 
-Follow these steps:
+2. Install dependencies:
+   ```
+   npm install
+   cd server && npm install
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Fill in your database connection string, Stripe keys, and other required variables
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+4. Run database migrations:
+   ```
+   cd server
+   npm run migrate
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+5. Start the development server:
+   ```
+   # In the root directory
+   npm run dev
+   
+   # In a separate terminal, start the backend
+   cd server
+   npm run dev
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+6. Open your browser and navigate to `http://localhost:5173`
 
-**Edit a file directly in GitHub**
+## WebRTC Architecture
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+SoulSeer implements a custom WebRTC solution for real-time communication:
 
-**Use GitHub Codespaces**
+1. **Signaling**: Custom signaling server using WebSockets for exchanging SDP offers/answers and ICE candidates
+2. **Media Handling**: Direct peer-to-peer connections for audio/video streaming
+3. **NAT Traversal**: STUN/TURN server integration for reliable connections across networks
+4. **Data Channels**: Secure text chat alongside audio/video
+5. **Connection Recovery**: Automatic reconnection handling for dropped connections
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Billing System
 
-## What technologies are used for this project?
+The pay-per-minute billing system works as follows:
 
-This project is built with:
+1. Clients pre-fund their account balance via Stripe
+2. During readings, a timer tracks session duration
+3. Every minute, the client's balance is decremented based on the reader's rate
+4. 70% of the payment goes to the reader, 30% to the platform
+5. Readers can cash out their earnings via Stripe Connect
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment
 
-## How can I deploy this project?
+[Include deployment instructions specific to your hosting environment]
 
-Simply open [Lovable](https://lovable.dev/projects/73e7c14a-76ac-4e1f-9bc8-ceac7247a0a6) and click on Share -> Publish.
+## License
 
-## Can I connect a custom domain to my Lovable project?
+[Your license information]
 
-Yes, you can!
+## Acknowledgments
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- [List any libraries, resources, or people you want to acknowledge]
