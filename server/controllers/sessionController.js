@@ -1,358 +1,469 @@
-import { pool } from '../config/db.js';
-import { v4 as uuidv4 } from 'uuid';
+import { enhancedWebRTCService } from '../services/enhancedWebrtcService.js';
+import { getSupabase } from '../config/supabase.js';
+import { StatusCodes } from 'http-status-codes';
 
-// Create a new reading session
-export const createSession = async (req, res) => {
-  try {
-    const { readerId, sessionType, rate } = req.body;
-    
-    if (!readerId || !sessionType || !rate) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-    
-    const sessionId = uuidv4();
-    const client = await pool.connect();
-    
-    try {
-      // Check if reader exists and is available
-      const readerResult = await client.query(
-        'SELECT * FROM profiles WHERE id = $1 AND role = $2',
-        [readerId, 'reader']
-      );
-      
-      if (readerResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Reader not found' });
-      }
-      
-      const reader = readerResult.rows[0];
-      
-      // Check if reader is available
-      if (reader.status !== 'online') {
-        return res.status(400).json({ message: 'Reader is not available' });
-      }
-      
-      // Check if client has sufficient balance
-      const clientResult = await client.query(
-        'SELECT balance FROM profiles WHERE id = $1',
-        [req.user.id]
-      );
-      
-      if (clientResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Client profile not found' });
-      }
-      
-      const clientBalance = clientResult.rows[0].balance || 0;
-      
-      if (clientBalance < rate) {
-        return res.status(400).json({ message: 'Insufficient balance' });
-      }
-      
-      // Create session
-      const result = await client.query(
-        `INSERT INTO sessions 
-         (id, reader_id, client_id, session_type, rate, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING *`,
-        [sessionId, readerId, req.user.id, sessionType, rate, 'pending', new Date()]
-      );
-      
-      // Create RTC session record
-      await client.query(
-        `INSERT INTO rtc_sessions
-         (session_id, reader_id, client_id, status, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [sessionId, readerId, req.user.id, 'pending', new Date()]
-      );
-      
-      // Send notification to reader
-      // This would typically be done via WebSockets or push notifications
-      
-      res.status(201).json(result.rows[0]);
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error creating session:', error);
-    res.status(500).json({ message: 'Failed to create session' });
-  }
-};
+const supabase = getSupabase();
 
-// Get session by ID
-export const getSessionById = async (req, res) => {
+// Request a new reading session
+export const requestSession = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const client = await pool.connect();
-    try {
-      const result = await client.query(
-        `SELECT s.*, 
-          r.display_name AS reader_name, 
-          r.profile_image AS reader_image,
-          c.display_name AS client_name,
-          c.profile_image AS client_image
-         FROM sessions s
-         JOIN profiles r ON s.reader_id = r.id
-         JOIN profiles c ON s.client_id = c.id
-         WHERE s.id = $1`,
-        [id]
-      );
-      
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: 'Session not found' });
-      }
-      
-      const session = result.rows[0];
-      
-      // Check if user is authorized to access this session
-      if (req.user.id !== session.reader_id && req.user.id !== session.client_id) {
-        return res.status(403).json({ message: 'Not authorized to access this session' });
-      }
-      
-      res.json(session);
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Error getting session:', error);
-    res.status(500).json({ message: 'Failed to get session' });
-  }
-};
+    const { readerId, sessionType, ratePerMinute } = req.body;
+    const clientId = req.user.id;
 
-// Get sessions for current user
-export const getUserSessions = async (req, res) => {
-  try {
-    const { status, limit = 20, offset = 0 } = req.query;
-    
-    const client = await pool.connect();
-    try {
-      let query = `
-        SELECT s.*, 
-          r.display_name AS reader_name, 
-          r.profile_image AS reader_image,
-          c.display_name AS client_name,
-          c.profile_image AS client_image
-        FROM sessions s
-        JOIN profiles r ON s.reader_id = r.id
-        JOIN profiles c ON s.client_id = c.id
-        WHERE (s.reader_id = $1 OR s.client_id = $1)
-      `;
-      
-      const queryParams = [req.user.id];
-      let paramIndex = 2;
-      
-      if (status) {
-        query += ` AND s.status = $${paramIndex}`;
-        queryParams.push(status);
-        paramIndex++;
-      }
-      
-      query += ` ORDER BY s.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-      queryParams.push(limit, offset);
-      
-      const result = await client.query(query, queryParams);
-      
-      // Get total count
-      let countQuery = `
-        SELECT COUNT(*) FROM sessions
-        WHERE (reader_id = $1 OR client_id = $1)
-      `;
-      
-      if (status) {
-        countQuery += ` AND status = $2`;
-      }
-      
-      const countResult = await client.query(
-        countQuery,
-        status ? [req.user.id, status] : [req.user.id]
-      );
-      
-      res.json({
-        sessions: result.rows,
-        total: parseInt(countResult.rows[0].count),
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+    // Validate input
+    if (!readerId || !sessionType || !ratePerMinute) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Missing required fields: readerId, sessionType, ratePerMinute'
       });
-    } finally {
-      client.release();
     }
+
+    // Validate session type
+    if (!['chat', 'audio', 'video'].includes(sessionType)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Invalid session type. Must be chat, audio, or video'
+      });
+    }
+
+    // Validate rate is positive
+    if (ratePerMinute <= 0) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Rate per minute must be positive'
+      });
+    }
+
+    // Check if client has any pending sessions
+    const { data: pendingSessions } = await supabase
+      .from('reading_sessions')
+      .select('id')
+      .eq('client_id', clientId)
+      .in('status', ['pending', 'accepted', 'in_progress']);
+
+    if (pendingSessions && pendingSessions.length > 0) {
+      return res.status(StatusCodes.CONFLICT).json({
+        error: 'You already have an active or pending session'
+      });
+    }
+
+    const session = await enhancedWebRTCService.createReadingSession(
+      clientId,
+      readerId,
+      sessionType,
+      ratePerMinute
+    );
+
+    res.status(StatusCodes.CREATED).json(session);
   } catch (error) {
-    console.error('Error getting sessions:', error);
-    res.status(500).json({ message: 'Failed to get sessions' });
+    console.error('Error requesting session:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to request session'
+    });
   }
 };
 
-// Update session status
-export const updateSessionStatus = async (req, res) => {
+// Respond to session request (accept/reject)
+export const respondToSession = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    if (!status) {
-      return res.status(400).json({ message: 'Missing status' });
+    const { sessionId, response } = req.body;
+    const readerId = req.user.id;
+
+    // Validate input
+    if (!sessionId || !response) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Missing required fields: sessionId, response'
+      });
     }
-    
-    const client = await pool.connect();
-    try {
-      // Check if session exists
-      const sessionResult = await client.query(
-        'SELECT * FROM sessions WHERE id = $1',
-        [id]
-      );
-      
-      if (sessionResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Session not found' });
-      }
-      
-      const session = sessionResult.rows[0];
-      
-      // Check if user is authorized to update this session
-      if (req.user.id !== session.reader_id && req.user.id !== session.client_id) {
-        return res.status(403).json({ message: 'Not authorized to update this session' });
-      }
-      
-      // Update session status
-      const result = await client.query(
-        `UPDATE sessions 
-         SET status = $1, updated_at = $2
-         WHERE id = $3
-         RETURNING *`,
-        [status, new Date(), id]
-      );
-      
-      // Update RTC session status
-      await client.query(
-        `UPDATE rtc_sessions 
-         SET status = $1, updated_at = $2
-         WHERE session_id = $3`,
-        [status, new Date(), id]
-      );
-      
-      res.json(result.rows[0]);
-    } finally {
-      client.release();
+
+    if (!['accept', 'reject'].includes(response)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Response must be either "accept" or "reject"'
+      });
     }
+
+    const result = await enhancedWebRTCService.respondToSession(
+      sessionId,
+      readerId,
+      response
+    );
+
+    res.status(StatusCodes.OK).json(result);
   } catch (error) {
-    console.error('Error updating session status:', error);
-    res.status(500).json({ message: 'Failed to update session status' });
+    console.error('Error responding to session:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to respond to session'
+    });
   }
 };
 
-// End session
+// Start a reading session
+export const startSession = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const userId = req.user.id;
+
+    if (!sessionId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID is required'
+      });
+    }
+
+    const result = await enhancedWebRTCService.startSession(sessionId, userId);
+
+    res.status(StatusCodes.OK).json(result);
+  } catch (error) {
+    console.error('Error starting session:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to start session'
+    });
+  }
+};
+
+// End a reading session
 export const endSession = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { duration, totalAmount } = req.body;
-    
-    const client = await pool.connect();
-    try {
-      // Check if session exists
-      const sessionResult = await client.query(
-        'SELECT * FROM sessions WHERE id = $1',
-        [id]
-      );
-      
-      if (sessionResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Session not found' });
-      }
-      
-      const session = sessionResult.rows[0];
-      
-      // Check if user is authorized to end this session
-      if (req.user.id !== session.reader_id && req.user.id !== session.client_id) {
-        return res.status(403).json({ message: 'Not authorized to end this session' });
-      }
-      
-      // Update session
-      const result = await client.query(
-        `UPDATE sessions 
-         SET status = $1, end_time = $2, duration_seconds = $3, total_amount = $4, updated_at = $5
-         WHERE id = $6
-         RETURNING *`,
-        ['completed', new Date(), duration || 0, totalAmount || 0, new Date(), id]
-      );
-      
-      // Update RTC session
-      await client.query(
-        `UPDATE rtc_sessions 
-         SET status = $1, ended_at = $2
-         WHERE session_id = $3`,
-        ['completed', new Date(), id]
-      );
-      
-      res.json(result.rows[0]);
-    } finally {
-      client.release();
+    const { sessionId } = req.body;
+    const userId = req.user.id;
+
+    if (!sessionId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID is required'
+      });
     }
+
+    // Verify user is part of the session
+    const { data: session } = await supabase
+      .from('reading_sessions')
+      .select('client_id, reader_id, status')
+      .eq('id', sessionId)
+      .single();
+
+    if (!session) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        error: 'Session not found'
+      });
+    }
+
+    if (session.client_id !== userId && session.reader_id !== userId) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        error: 'You are not authorized to end this session'
+      });
+    }
+
+    const result = await enhancedWebRTCService.endSession(sessionId, 'manual');
+
+    res.status(StatusCodes.OK).json(result);
   } catch (error) {
     console.error('Error ending session:', error);
-    res.status(500).json({ message: 'Failed to end session' });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to end session'
+    });
   }
 };
 
-// Rate session
+// Send message in session
+export const sendMessage = async (req, res) => {
+  try {
+    const { sessionId, content, type = 'text' } = req.body;
+    const senderId = req.user.id;
+
+    if (!sessionId || !content) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID and content are required'
+      });
+    }
+
+    const message = await enhancedWebRTCService.sendMessage(
+      sessionId,
+      senderId,
+      content,
+      type
+    );
+
+    res.status(StatusCodes.CREATED).json(message);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to send message'
+    });
+  }
+};
+
+// Get session messages
+export const getSessionMessages = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+
+    if (!sessionId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID is required'
+      });
+    }
+
+    const messages = await enhancedWebRTCService.getSessionMessages(sessionId, userId);
+
+    res.status(StatusCodes.OK).json(messages);
+  } catch (error) {
+    console.error('Error getting session messages:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to get session messages'
+    });
+  }
+};
+
+// Get session history
+export const getSessionHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 20, offset = 0 } = req.query;
+
+    const sessions = await enhancedWebRTCService.getSessionHistory(
+      userId,
+      parseInt(limit),
+      parseInt(offset)
+    );
+
+    res.status(StatusCodes.OK).json(sessions);
+  } catch (error) {
+    console.error('Error getting session history:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to get session history'
+    });
+  }
+};
+
+// Get active sessions for user
+export const getActiveSessions = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const sessions = await enhancedWebRTCService.getActiveSessions(userId);
+
+    res.status(StatusCodes.OK).json(sessions);
+  } catch (error) {
+    console.error('Error getting active sessions:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to get active sessions'
+    });
+  }
+};
+
+// Get session details
+export const getSessionDetails = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+
+    if (!sessionId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID is required'
+      });
+    }
+
+    const { data: session, error } = await supabase
+      .from('reading_sessions')
+      .select(`
+        *,
+        reader_profile:user_profiles!reading_sessions_reader_id_fkey(
+          id,
+          full_name,
+          avatar_url,
+          bio,
+          specialties,
+          rating,
+          total_reviews
+        ),
+        client_profile:user_profiles!reading_sessions_client_id_fkey(
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('id', sessionId)
+      .single();
+
+    if (error || !session) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        error: 'Session not found'
+      });
+    }
+
+    // Check if user is part of the session
+    if (session.client_id !== userId && session.reader_id !== userId) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        error: 'You are not authorized to view this session'
+      });
+    }
+
+    res.status(StatusCodes.OK).json(session);
+  } catch (error) {
+    console.error('Error getting session details:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to get session details'
+    });
+  }
+};
+
+// Rate a completed session
 export const rateSession = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { sessionId } = req.params;
     const { rating, review } = req.body;
-    
+    const userId = req.user.id;
+
+    if (!sessionId) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Session ID is required'
+      });
+    }
+
     if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: 'Invalid rating' });
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Rating must be between 1 and 5'
+      });
     }
-    
-    const client = await pool.connect();
-    try {
-      // Check if session exists
-      const sessionResult = await client.query(
-        'SELECT * FROM sessions WHERE id = $1',
-        [id]
-      );
-      
-      if (sessionResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Session not found' });
-      }
-      
-      const session = sessionResult.rows[0];
-      
-      // Check if user is the client of this session
-      if (req.user.id !== session.client_id) {
-        return res.status(403).json({ message: 'Only clients can rate sessions' });
-      }
-      
-      // Check if session is completed
-      if (session.status !== 'completed') {
-        return res.status(400).json({ message: 'Can only rate completed sessions' });
-      }
-      
-      // Add rating
-      const result = await client.query(
-        `INSERT INTO session_ratings
-         (session_id, client_id, reader_id, rating, review, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [id, session.client_id, session.reader_id, rating, review || null, new Date()]
-      );
-      
-      // Update reader's average rating
-      await client.query(
-        `UPDATE profiles
-         SET rating_avg = (
-           SELECT AVG(rating) FROM session_ratings
-           WHERE reader_id = $1
-         ),
-         rating_count = (
-           SELECT COUNT(*) FROM session_ratings
-           WHERE reader_id = $1
-         )
-         WHERE id = $1`,
-        [session.reader_id]
-      );
-      
-      res.json(result.rows[0]);
-    } finally {
-      client.release();
+
+    // Get session details
+    const { data: session, error: sessionError } = await supabase
+      .from('reading_sessions')
+      .select('client_id, reader_id, status')
+      .eq('id', sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        error: 'Session not found'
+      });
     }
+
+    if (session.status !== 'completed') {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        error: 'Can only rate completed sessions'
+      });
+    }
+
+    // Determine which rating field to update
+    let updateField;
+    let targetUserId;
+
+    if (session.client_id === userId) {
+      updateField = 'client_rating';
+      targetUserId = session.reader_id;
+    } else if (session.reader_id === userId) {
+      updateField = 'reader_rating';
+      targetUserId = session.client_id;
+    } else {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        error: 'You are not authorized to rate this session'
+      });
+    }
+
+    // Update session rating
+    const { error: updateError } = await supabase
+      .from('reading_sessions')
+      .update({
+        [updateField]: rating,
+        [`${updateField.split('_')[0]}_review`]: review
+      })
+      .eq('id', sessionId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Update overall reader rating if this is a client rating
+    if (updateField === 'client_rating') {
+      // Calculate new average rating for the reader
+      const { data: readerSessions } = await supabase
+        .from('reading_sessions')
+        .select('client_rating')
+        .eq('reader_id', targetUserId)
+        .eq('status', 'completed')
+        .not('client_rating', 'is', null);
+
+      if (readerSessions && readerSessions.length > 0) {
+        const totalRating = readerSessions.reduce((sum, s) => sum + s.client_rating, 0);
+        const averageRating = totalRating / readerSessions.length;
+
+        await supabase
+          .from('user_profiles')
+          .update({
+            rating: averageRating,
+            total_reviews: readerSessions.length
+          })
+          .eq('id', targetUserId);
+      }
+    }
+
+    res.status(StatusCodes.OK).json({ success: true });
   } catch (error) {
     console.error('Error rating session:', error);
-    res.status(500).json({ message: 'Failed to rate session' });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to rate session'
+    });
   }
+};
+
+// Get available readers
+export const getAvailableReaders = async (req, res) => {
+  try {
+    const { specialty, sortBy = 'rating', order = 'desc', limit = 20, offset = 0 } = req.query;
+
+    let query = supabase
+      .from('user_profiles')
+      .select(`
+        id,
+        full_name,
+        avatar_url,
+        bio,
+        specialties,
+        rating,
+        total_reviews,
+        per_minute_rate_chat,
+        per_minute_rate_phone,
+        per_minute_rate_video,
+        is_online
+      `)
+      .eq('is_online', true);
+
+    // Filter by specialty if provided
+    if (specialty) {
+      query = query.contains('specialties', [specialty]);
+    }
+
+    // Apply sorting
+    const validSortFields = ['rating', 'total_reviews', 'per_minute_rate_chat'];
+    if (validSortFields.includes(sortBy)) {
+      query = query.order(sortBy, { ascending: order === 'asc' });
+    }
+
+    // Apply pagination
+    query = query.range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+    const { data: readers, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(StatusCodes.OK).json(readers || []);
+  } catch (error) {
+    console.error('Error getting available readers:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      error: error.message || 'Failed to get available readers'
+    });
+  }
+};
+
+export default {
+  requestSession,
+  respondToSession,
+  startSession,
+  endSession,
+  sendMessage,
+  getSessionMessages,
+  getSessionHistory,
+  getActiveSessions,
+  getSessionDetails,
+  rateSession,
+  getAvailableReaders
 };

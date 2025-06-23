@@ -1,264 +1,329 @@
-import express from 'express';
-import { Server } from 'socket.io';
-import { v4 as uuidv4 } from 'uuid';
-import { pool } from '../config/db.js';
-import Stripe from 'stripe';
+import { enhancedWebRTCService } from './enhancedWebrtcService.js';
+import { getSupabase } from '../config/supabase.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const supabase = getSupabase();
 
-// Store active sessions
-const activeSessions = new Map();
+// Store connected users and their socket IDs
+const connectedUsers = new Map();
+const userSockets = new Map();
 
-// Initialize Socket.IO
 export const initSocket = (io) => {
   io.on('connection', (socket) => {
-    console.log(`Socket connected: ${socket.id}`);
+    console.log('User connected:', socket.id);
 
-    // Join a reading room
-    socket.on('join-room', async ({ sessionId, userId, role }) => {
+    // Authenticate socket connection
+    socket.on('authenticate', async (data) => {
       try {
-        // Join the room
-        socket.join(sessionId);
+        const { token, userId } = data;
         
-        // Store session info
-        if (!activeSessions.has(sessionId)) {
-          // Get session details from database
-          const client = await pool.connect();
-          try {
-            const result = await client.query(
-              'SELECT * FROM sessions WHERE id = $1',
-              [sessionId]
-            );
-            
-            if (result.rows.length === 0) {
-              socket.emit('error', { message: 'Session not found' });
-              return;
-            }
-            
-            const session = result.rows[0];
-            
-            activeSessions.set(sessionId, {
-              id: sessionId,
-              readerId: session.reader_id,
-              clientId: session.client_id,
-              rate: session.rate,
-              startTime: null,
-              status: 'waiting',
-              participants: new Set(),
-              billingInterval: null,
-            });
-          } finally {
-            client.release();
-          }
+        if (!token || !userId) {
+          socket.emit('auth_error', { error: 'Missing authentication data' });
+          return;
         }
+
+        // Verify token with Supabase
+        const { data: { user }, error } = await supabase.auth.getUser(token);
         
-        // Add participant to session
-        const session = activeSessions.get(sessionId);
-        session.participants.add(userId);
-        
-        // Notify room that user joined
-        socket.to(sessionId).emit('user-joined', { userId, role });
-        
-        // If both participants are present, session is ready
-        if (session.participants.size === 2) {
-          io.to(sessionId).emit('session-ready', { sessionId });
+        if (error || !user || user.id !== userId) {
+          socket.emit('auth_error', { error: 'Invalid authentication' });
+          return;
         }
+
+        // Store user connection
+        socket.userId = userId;
+        connectedUsers.set(userId, {
+          socketId: socket.id,
+          lastSeen: new Date(),
+          isOnline: true
+        });
+        userSockets.set(socket.id, userId);
+
+        // Join user-specific room
+        socket.join(`user_${userId}`);
+
+        // Update user online status in database
+        await supabase
+          .from('user_profiles')
+          .update({ 
+            is_online: true,
+            last_seen: new Date().toISOString()
+          })
+          .eq('user_id', userId);
+
+        socket.emit('authenticated', { success: true });
+        
+        // Notify about active sessions
+        const activeSessions = await enhancedWebRTCService.getActiveSessions(userId);
+        if (activeSessions.length > 0) {
+          socket.emit('active_sessions', activeSessions);
+        }
+
+        console.log(`User ${userId} authenticated`);
       } catch (error) {
-        console.error('Error joining room:', error);
-        socket.emit('error', { message: 'Failed to join room' });
+        console.error('Socket authentication error:', error);
+        socket.emit('auth_error', { error: 'Authentication failed' });
       }
+    });
+
+    // Join session room
+    socket.on('join_session_room', (sessionId) => {
+      if (!socket.userId) {
+        socket.emit('error', { message: 'Not authenticated' });
+        return;
+      }
+      
+      socket.join(`session_${sessionId}`);
+      console.log(`User ${socket.userId} joined session ${sessionId}`);
+    });
+
+    // Leave session room
+    socket.on('leave_session_room', (sessionId) => {
+      socket.leave(`session_${sessionId}`);
+      console.log(`User ${socket.userId} left session ${sessionId}`);
     });
 
     // WebRTC signaling
-    socket.on('signal', ({ sessionId, signal, to }) => {
-      socket.to(sessionId).emit('signal', {
-        from: socket.id,
-        signal,
+    socket.on('webrtc_signal', async (data) => {
+      try {
+        if (!socket.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const { sessionId, signal, targetUserId } = data;
+        
+        if (!sessionId || !signal || !targetUserId) {
+          socket.emit('error', { message: 'Missing required fields' });
+          return;
+        }
+
+        // Verify user is part of the session
+        const { data: session } = await supabase
+          .from('reading_sessions')
+          .select('client_id, reader_id, status')
+          .eq('id', sessionId)
+          .single();
+
+        if (!session || (session.client_id !== socket.userId && session.reader_id !== socket.userId)) {
+          socket.emit('error', { message: 'Unauthorized' });
+          return;
+        }
+
+        // Forward signal to target user
+        socket.to(`user_${targetUserId}`).emit('webrtc_signal', {
+          sessionId,
+          fromUserId: socket.userId,
+          signal
+        });
+
+        console.log(`WebRTC signal forwarded from ${socket.userId} to ${targetUserId}`);
+      } catch (error) {
+        console.error('WebRTC signaling error:', error);
+        socket.emit('error', { message: 'Signaling failed' });
+      }
+    });
+
+    // Session messages
+    socket.on('session_message', async (data) => {
+      try {
+        if (!socket.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const { sessionId, content, type = 'text' } = data;
+        
+        if (!sessionId || !content) {
+          socket.emit('error', { message: 'Missing required fields' });
+          return;
+        }
+
+        // Send message through WebRTC service
+        const message = await enhancedWebRTCService.sendMessage(
+          sessionId,
+          socket.userId,
+          content,
+          type
+        );
+
+        // Message is automatically forwarded to session room by the service
+        console.log(`Message sent in session ${sessionId} by ${socket.userId}`);
+      } catch (error) {
+        console.error('Session message error:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Reader availability updates
+    socket.on('update_availability', async (data) => {
+      try {
+        if (!socket.userId) {
+          socket.emit('error', { message: 'Not authenticated' });
+          return;
+        }
+
+        const { isAvailable } = data;
+        
+        // Update reader availability
+        await supabase
+          .from('user_profiles')
+          .update({ is_online: isAvailable })
+          .eq('user_id', socket.userId);
+
+        // Broadcast availability change to clients looking for readers
+        io.emit('reader_availability_changed', {
+          readerId: socket.userId,
+          isAvailable
+        });
+
+        console.log(`Reader ${socket.userId} availability updated: ${isAvailable}`);
+      } catch (error) {
+        console.error('Availability update error:', error);
+        socket.emit('error', { message: 'Failed to update availability' });
+      }
+    });
+
+    // Typing indicators
+    socket.on('typing_start', (data) => {
+      if (!socket.userId) return;
+      
+      const { sessionId } = data;
+      socket.to(`session_${sessionId}`).emit('user_typing', {
+        userId: socket.userId,
+        isTyping: true
       });
     });
 
-    // Start session and billing
-    socket.on('start-session', async ({ sessionId }) => {
-      try {
-        const session = activeSessions.get(sessionId);
-        if (!session) {
-          socket.emit('error', { message: 'Session not found' });
-          return;
-        }
-        
-        // Update session status
-        session.status = 'active';
-        session.startTime = new Date();
-        
-        // Update database
-        const client = await pool.connect();
-        try {
-          await client.query(
-            'UPDATE sessions SET status = $1, start_time = $2 WHERE id = $3',
-            ['active', session.startTime, sessionId]
-          );
-        } finally {
-          client.release();
-        }
-        
-        // Notify participants
-        io.to(sessionId).emit('session-started', {
-          sessionId,
-          startTime: session.startTime,
-        });
-        
-        // Start billing timer (every minute)
-        session.billingInterval = setInterval(async () => {
-          try {
-            await processBilling(sessionId);
-          } catch (error) {
-            console.error('Billing error:', error);
-            clearInterval(session.billingInterval);
-            io.to(sessionId).emit('billing-error', {
-              message: 'Billing failed. Session will end.',
-            });
-            endSession(sessionId, io);
-          }
-        }, 60000); // Bill every minute
-      } catch (error) {
-        console.error('Error starting session:', error);
-        socket.emit('error', { message: 'Failed to start session' });
-      }
+    socket.on('typing_stop', (data) => {
+      if (!socket.userId) return;
+      
+      const { sessionId } = data;
+      socket.to(`session_${sessionId}`).emit('user_typing', {
+        userId: socket.userId,
+        isTyping: false
+      });
     });
 
-    // End session
-    socket.on('end-session', ({ sessionId }) => {
-      endSession(sessionId, io);
+    // Heartbeat for connection monitoring
+    socket.on('heartbeat', () => {
+      if (socket.userId) {
+        const userData = connectedUsers.get(socket.userId);
+        if (userData) {
+          userData.lastSeen = new Date();
+          connectedUsers.set(socket.userId, userData);
+        }
+      }
+      socket.emit('heartbeat_ack');
     });
 
     // Handle disconnection
-    socket.on('disconnect', async () => {
-      console.log(`Socket disconnected: ${socket.id}`);
+    socket.on('disconnect', async (reason) => {
+      console.log('User disconnected:', socket.id, 'Reason:', reason);
       
-      // Find and end any active sessions for this socket
-      for (const [sessionId, session] of activeSessions.entries()) {
-        if (session.participants.has(socket.id)) {
-          session.participants.delete(socket.id);
-          
-          // If session was active, end it
-          if (session.status === 'active') {
-            endSession(sessionId, io);
+      if (socket.userId) {
+        try {
+          // Update user offline status
+          await supabase
+            .from('user_profiles')
+            .update({ 
+              is_online: false,
+              last_seen: new Date().toISOString()
+            })
+            .eq('user_id', socket.userId);
+
+          // Clean up connection tracking
+          connectedUsers.delete(socket.userId);
+          userSockets.delete(socket.id);
+
+          // Notify sessions about disconnection
+          const activeSessions = enhancedWebRTCService.activeSessions;
+          for (const [sessionId, sessionData] of activeSessions) {
+            if (sessionData.client_id === socket.userId || sessionData.reader_id === socket.userId) {
+              socket.to(`session_${sessionId}`).emit('user_disconnected', {
+                userId: socket.userId,
+                sessionId
+              });
+            }
           }
-          
-          // If no participants left, remove session
-          if (session.participants.size === 0) {
-            activeSessions.delete(sessionId);
-          }
+
+          console.log(`User ${socket.userId} cleaned up`);
+        } catch (error) {
+          console.error('Disconnect cleanup error:', error);
         }
       }
     });
+
+    // Error handling
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+  });
+
+  // Periodic cleanup of inactive connections
+  setInterval(() => {
+    const now = new Date();
+    for (const [userId, userData] of connectedUsers) {
+      const timeDiff = now - userData.lastSeen;
+      if (timeDiff > 5 * 60 * 1000) { // 5 minutes
+        console.log(`Cleaning up inactive connection for user ${userId}`);
+        connectedUsers.delete(userId);
+        
+        // Update database
+        supabase
+          .from('user_profiles')
+          .update({ is_online: false })
+          .eq('user_id', userId)
+          .then(() => {
+            console.log(`User ${userId} marked offline due to inactivity`);
+          })
+          .catch(error => {
+            console.error('Error updating inactive user status:', error);
+          });
+      }
+    }
+  }, 60000); // Run every minute
+
+  console.log('Socket.IO service initialized');
+};
+
+// Helper functions for sending notifications
+export const sendNotificationToUser = (io, userId, notification) => {
+  io.to(`user_${userId}`).emit('notification', notification);
+};
+
+export const sendSessionUpdate = (io, sessionId, update) => {
+  io.to(`session_${sessionId}`).emit('session_update', update);
+};
+
+export const broadcastReaderAvailability = (io, readerId, isAvailable) => {
+  io.emit('reader_availability_changed', {
+    readerId,
+    isAvailable
   });
 };
 
-// Process billing for a session
-async function processBilling(sessionId) {
-  const session = activeSessions.get(sessionId);
-  if (!session || session.status !== 'active') return;
-  
-  const client = await pool.connect();
-  try {
-    // Get current client balance
-    const balanceResult = await client.query(
-      'SELECT balance FROM profiles WHERE id = $1',
-      [session.clientId]
-    );
-    
-    if (balanceResult.rows.length === 0) {
-      throw new Error('Client profile not found');
-    }
-    
-    const currentBalance = balanceResult.rows[0].balance;
-    const amountToCharge = session.rate; // Rate is per minute
-    
-    // Check if client has sufficient balance
-    if (currentBalance < amountToCharge) {
-      throw new Error('Insufficient balance');
-    }
-    
-    // Update client balance
-    const newBalance = currentBalance - amountToCharge;
-    await client.query(
-      'UPDATE profiles SET balance = $1 WHERE id = $2',
-      [newBalance, session.clientId]
-    );
-    
-    // Record billing transaction
-    const now = new Date();
-    await client.query(
-      `INSERT INTO billing_events 
-       (session_id, event_type, amount_billed, client_balance_before, client_balance_after, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [sessionId, 'minute', amountToCharge, currentBalance, newBalance, now]
-    );
-    
-    // Calculate reader earnings (70%)
-    const readerEarnings = Math.floor(amountToCharge * 0.7);
-    const platformFee = amountToCharge - readerEarnings;
-    
-    // Update session totals
-    await client.query(
-      `UPDATE sessions 
-       SET total_amount = total_amount + $1, 
-           reader_earnings = reader_earnings + $2,
-           platform_fee = platform_fee + $3,
-           duration_seconds = duration_seconds + 60
-       WHERE id = $4`,
-      [amountToCharge, readerEarnings, platformFee, sessionId]
-    );
-    
-    // Notify clients of balance update
-    return {
-      newBalance,
-      amountCharged: amountToCharge,
-      minutesBilled: 1
-    };
-  } finally {
-    client.release();
-  }
-}
+// Get connected users count
+export const getConnectedUsersCount = () => {
+  return connectedUsers.size;
+};
 
-// End a session
-async function endSession(sessionId, io) {
-  const session = activeSessions.get(sessionId);
-  if (!session) return;
-  
-  // Clear billing interval
-  if (session.billingInterval) {
-    clearInterval(session.billingInterval);
-    session.billingInterval = null;
-  }
-  
-  // Calculate final duration
-  let durationSeconds = 0;
-  if (session.startTime) {
-    const endTime = new Date();
-    durationSeconds = Math.floor((endTime - session.startTime) / 1000);
-  }
-  
-  // Update session status in database
-  const client = await pool.connect();
-  try {
-    await client.query(
-      'UPDATE sessions SET status = $1, end_time = $2, duration_seconds = $3 WHERE id = $4',
-      ['completed', new Date(), durationSeconds, sessionId]
-    );
-  } catch (error) {
-    console.error('Error updating session status:', error);
-  } finally {
-    client.release();
-  }
-  
-  // Notify participants
-  io.to(sessionId).emit('session-ended', {
-    sessionId,
-    duration: durationSeconds,
-  });
-  
-  // Remove session from active sessions
-  activeSessions.delete(sessionId);
-}
+// Check if user is online
+export const isUserOnline = (userId) => {
+  return connectedUsers.has(userId);
+};
+
+// Get user's socket ID
+export const getUserSocketId = (userId) => {
+  const userData = connectedUsers.get(userId);
+  return userData ? userData.socketId : null;
+};
+
+export default {
+  initSocket,
+  sendNotificationToUser,
+  sendSessionUpdate,
+  broadcastReaderAvailability,
+  getConnectedUsersCount,
+  isUserOnline,
+  getUserSocketId
+};

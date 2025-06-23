@@ -1,474 +1,570 @@
+import { io, Socket } from 'socket.io-client';
 import { supabase } from '@/lib/supabase';
 
-// Define types
-export type WebRTCSignal = {
-  type: string;
+export interface SessionData {
+  id: string;
+  client_id: string;
+  reader_id: string;
+  type: 'chat' | 'audio' | 'video';
+  rate_per_minute: number;
+  status: string;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  total_cost?: number;
+}
+
+export interface WebRTCSignal {
+  type: 'offer' | 'answer' | 'ice_candidate';
   data: any;
-};
+}
 
-export type WebRTCSession = {
+export interface BillingUpdate {
   sessionId: string;
-  readerId: string;
-  clientId: string;
-  status: 'pending' | 'connecting' | 'active' | 'completed';
-  rate: number;
-};
+  minutesCharged: number;
+  totalCost: number;
+  clientBalance: number;
+}
 
-export type ICEServer = {
-  urls: string | string[];
-  username?: string;
-  credential?: string;
-};
-
-class WebRTCClient {
+export class WebRTCClient {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private dataChannel: RTCDataChannel | null = null;
-  private iceServers: ICEServer[] = [];
+  private socket: Socket | null = null;
   private sessionId: string | null = null;
   private userId: string | null = null;
-  private peerId: string | null = null;
-  private isReader: boolean = false;
-  private pollingInterval: number | null = null;
-  private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 5;
-  
+  private isInitiator: boolean = false;
+
   // Event callbacks
-  private onTrackCallbacks: ((stream: MediaStream) => void)[] = [];
-  private onDataChannelMessageCallbacks: ((message: any) => void)[] = [];
-  private onConnectionStateChangeCallbacks: ((state: RTCPeerConnectionState) => void)[] = [];
-  private onIceCandidateCallbacks: ((candidate: RTCIceCandidate | null) => void)[] = [];
-  private onDisconnectCallbacks: (() => void)[] = [];
-  
+  private onLocalStreamCallback: ((stream: MediaStream) => void) | null = null;
+  private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null;
+  private onMessageCallback: ((message: any) => void) | null = null;
+  private onBillingUpdateCallback: ((update: BillingUpdate) => void) | null = null;
+  private onSessionEndedCallback: ((data: any) => void) | null = null;
+  private onConnectionStateCallback: ((state: string) => void) | null = null;
+
+  private readonly iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: `turn:${import.meta.env.VITE_TURN_SERVERS || 'relay1.expressturn.com:3480'}`,
+      username: import.meta.env.VITE_TURN_USERNAME || '',
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
+    },
+  ];
+
   constructor() {
-    this.initializeIceServers();
+    this.initializeSocket();
   }
-  
-  // Initialize ICE servers from environment or fetch from server
-  private async initializeIceServers() {
-    try {
-      // Try to get ICE servers from environment
-      const envIceServers = process.env.WEBRTC_ICE_SERVERS;
-      if (envIceServers) {
-        this.iceServers = JSON.parse(envIceServers);
-      } else {
-        // Fetch from server
-        const response = await fetch('/api/webrtc/ice-servers');
-        const data = await response.json();
-        this.iceServers = data.iceServers;
+
+  private async initializeSocket() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    this.userId = user.id;
+    this.socket = io(import.meta.env.VITE_WEBSOCKET_URL || 'http://localhost:5000', {
+      auth: {
+        userId: user.id
       }
-    } catch (error) {
-      console.error('Error initializing ICE servers:', error);
-      // Fallback to default STUN servers
-      this.iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ];
-    }
-  }
-  
-  // Initialize a WebRTC session
-  public async initialize(
-    sessionId: string,
-    userId: string,
-    peerId: string,
-    isReader: boolean
-  ) {
-    this.sessionId = sessionId;
-    this.userId = userId;
-    this.peerId = peerId;
-    this.isReader = isReader;
-    
-    // Create peer connection
-    this.peerConnection = new RTCPeerConnection({
-      iceServers: this.iceServers
     });
-    
-    // Set up remote stream
-    this.remoteStream = new MediaStream();
-    
-    // Set up event handlers
-    this.setupPeerConnectionEvents();
-    
-    // Start polling for signals
-    this.startSignalPolling();
-    
-    return this;
+
+    this.setupSocketListeners();
   }
-  
-  // Set up peer connection event handlers
-  private setupPeerConnectionEvents() {
-    if (!this.peerConnection) return;
-    
-    // Handle ICE candidates
-    this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.sendSignal({
-          type: 'candidate',
-          data: event.candidate
-        });
-        
-        this.onIceCandidateCallbacks.forEach(callback => callback(event.candidate));
+
+  private setupSocketListeners() {
+    if (!this.socket) return;
+
+    // Session management
+    this.socket.on('session_request', this.handleSessionRequest.bind(this));
+    this.socket.on('session_response', this.handleSessionResponse.bind(this));
+    this.socket.on('session_started', this.handleSessionStarted.bind(this));
+    this.socket.on('session_ended', this.handleSessionEnded.bind(this));
+
+    // WebRTC signaling
+    this.socket.on('webrtc_signal', this.handleWebRTCSignal.bind(this));
+
+    // Billing updates
+    this.socket.on('billing_update', this.handleBillingUpdate.bind(this));
+
+    // Chat messages
+    this.socket.on('new_message', this.handleNewMessage.bind(this));
+
+    // Connection events
+    this.socket.on('connect', () => {
+      console.log('Connected to server');
+      if (this.userId) {
+        this.socket?.emit('join_user_room', this.userId);
       }
-    };
-    
-    // Handle connection state changes
-    this.peerConnection.onconnectionstatechange = () => {
-      const state = this.peerConnection?.connectionState;
-      console.log('Connection state changed:', state);
-      
-      this.onConnectionStateChangeCallbacks.forEach(callback => {
-        if (state) callback(state);
-      });
-      
-      if (state === 'disconnected' || state === 'failed') {
-        this.handleDisconnection();
-      } else if (state === 'connected') {
-        // Reset reconnect attempts when connected
-        this.reconnectAttempts = 0;
-      }
-    };
-    
-    // Handle incoming tracks
-    this.peerConnection.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => {
-        this.remoteStream?.addTrack(track);
-      });
-      
-      if (this.remoteStream) {
-        this.onTrackCallbacks.forEach(callback => callback(this.remoteStream!));
-      }
-    };
-    
-    // Handle data channel
-    this.peerConnection.ondatachannel = (event) => {
-      this.dataChannel = event.channel;
-      this.setupDataChannel();
-    };
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+    });
   }
-  
-  // Set up data channel event handlers
-  private setupDataChannel() {
-    if (!this.dataChannel) return;
-    
-    this.dataChannel.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        this.onDataChannelMessageCallbacks.forEach(callback => callback(message));
-      } catch (error) {
-        console.error('Error parsing data channel message:', error);
-      }
-    };
-    
-    this.dataChannel.onclose = () => {
-      console.log('Data channel closed');
-    };
-    
-    this.dataChannel.onerror = (error) => {
-      console.error('Data channel error:', error);
-    };
-  }
-  
-  // Start polling for WebRTC signals
-  private startSignalPolling() {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-    }
-    
-    this.pollingInterval = window.setInterval(async () => {
-      try {
-        await this.pollSignals();
-      } catch (error) {
-        console.error('Error polling signals:', error);
-      }
-    }, 1000);
-  }
-  
-  // Poll for pending signals
-  private async pollSignals() {
-    if (!this.sessionId || !this.userId) return;
-    
+
+  // Request a reading session
+  async requestSession(readerId: string, sessionType: 'chat' | 'audio' | 'video', ratePerMinute: number): Promise<SessionData> {
     try {
-      const response = await fetch(`/api/webrtc/signals/${this.sessionId}`);
-      const data = await response.json();
-      
-      if (data.signals && data.signals.length > 0) {
-        for (const signal of data.signals) {
-          await this.handleSignal(signal);
-        }
-      }
-    } catch (error) {
-      console.error('Error polling signals:', error);
-    }
-  }
-  
-  // Handle incoming signal
-  private async handleSignal(signal: { type: string; data: any }) {
-    if (!this.peerConnection) return;
-    
-    try {
-      const { type, data } = signal;
-      
-      switch (type) {
-        case 'offer':
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-          const answer = await this.peerConnection.createAnswer();
-          await this.peerConnection.setLocalDescription(answer);
-          await this.sendSignal({
-            type: 'answer',
-            data: answer
-          });
-          break;
-          
-        case 'answer':
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-          break;
-          
-        case 'candidate':
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
-          break;
-      }
-    } catch (error) {
-      console.error('Error handling signal:', error);
-    }
-  }
-  
-  // Send WebRTC signal to peer
-  private async sendSignal(signal: WebRTCSignal) {
-    if (!this.sessionId || !this.peerId) return;
-    
-    try {
-      await fetch('/api/webrtc/signal', {
+      const response = await fetch('/api/sessions/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
-          sessionId: this.sessionId,
-          toUserId: this.peerId,
-          signal
-        }),
+          readerId,
+          sessionType,
+          ratePerMinute
+        })
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to request session');
+      }
+
+      return await response.json();
     } catch (error) {
-      console.error('Error sending signal:', error);
+      console.error('Error requesting session:', error);
+      throw error;
     }
   }
-  
-  // Initialize local media stream
-  public async initializeLocalStream(constraints: MediaStreamConstraints = { audio: true, video: true }) {
+
+  // Respond to session request (for readers)
+  async respondToSession(sessionId: string, response: 'accept' | 'reject'): Promise<void> {
     try {
+      const apiResponse = await fetch('/api/sessions/respond', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          sessionId,
+          response
+        })
+      });
+
+      if (!apiResponse.ok) {
+        throw new Error('Failed to respond to session');
+      }
+    } catch (error) {
+      console.error('Error responding to session:', error);
+      throw error;
+    }
+  }
+
+  // Start WebRTC session
+  async startSession(sessionId: string, isInitiator: boolean = false): Promise<void> {
+    this.sessionId = sessionId;
+    this.isInitiator = isInitiator;
+
+    try {
+      // Join session room
+      this.socket?.emit('join_session_room', sessionId);
+
+      // Initialize peer connection
+      await this.initializePeerConnection();
+
+      // Get user media
+      await this.initializeLocalStream();
+
+      // If initiator, create offer
+      if (isInitiator) {
+        await this.createOffer();
+      }
+
+      // Notify server that session is starting
+      const response = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ sessionId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start session');
+      }
+    } catch (error) {
+      console.error('Error starting session:', error);
+      throw error;
+    }
+  }
+
+  private async initializePeerConnection(): Promise<void> {
+    this.peerConnection = new RTCPeerConnection({ iceServers: this.iceServers });
+
+    // Handle ICE candidates
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate && this.socket && this.sessionId) {
+        this.socket.emit('webrtc_signal', {
+          sessionId: this.sessionId,
+          signal: {
+            type: 'ice_candidate',
+            data: event.candidate
+          }
+        });
+      }
+    };
+
+    // Handle remote stream
+    this.peerConnection.ontrack = (event) => {
+      this.remoteStream = event.streams[0];
+      this.onRemoteStreamCallback?.(this.remoteStream);
+    };
+
+    // Handle connection state changes
+    this.peerConnection.onconnectionstatechange = () => {
+      const state = this.peerConnection?.connectionState || 'unknown';
+      this.onConnectionStateCallback?.(state);
+      
+      if (state === 'disconnected' || state === 'failed') {
+        this.handleConnectionLoss();
+      }
+    };
+
+    // Handle data channel
+    this.peerConnection.ondatachannel = (event) => {
+      this.setupDataChannel(event.channel);
+    };
+  }
+
+  private async initializeLocalStream(): Promise<void> {
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: true,
+        video: this.sessionId ? true : false // Only video for video sessions
+      };
+
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       
       // Add tracks to peer connection
-      if (this.peerConnection && this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          this.peerConnection!.addTrack(track, this.localStream!);
-        });
-      }
-      
-      return this.localStream;
+      this.localStream.getTracks().forEach(track => {
+        if (this.peerConnection && this.localStream) {
+          this.peerConnection.addTrack(track, this.localStream);
+        }
+      });
+
+      this.onLocalStreamCallback?.(this.localStream);
     } catch (error) {
       console.error('Error accessing media devices:', error);
       throw error;
     }
   }
-  
-  // Create an offer as initiator
-  public async createOffer() {
-    if (!this.peerConnection) {
-      throw new Error('Peer connection not initialized');
-    }
-    
+
+  private async createOffer(): Promise<void> {
+    if (!this.peerConnection) return;
+
     try {
       // Create data channel for chat
-      this.dataChannel = this.peerConnection.createDataChannel('soulseer-chat');
-      this.setupDataChannel();
-      
-      // Create offer
-      const offer = await this.peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      });
-      
+      this.dataChannel = this.peerConnection.createDataChannel('chat');
+      this.setupDataChannel(this.dataChannel);
+
+      const offer = await this.peerConnection.createOffer();
       await this.peerConnection.setLocalDescription(offer);
-      
-      // Send offer to peer
-      await this.sendSignal({
-        type: 'offer',
-        data: offer
+
+      // Send offer through socket
+      this.socket?.emit('webrtc_signal', {
+        sessionId: this.sessionId,
+        signal: {
+          type: 'offer',
+          data: offer
+        }
       });
-      
-      // Update session status
-      await this.updateSessionStatus('connecting', {
-        clientSdp: this.isReader ? undefined : JSON.stringify(offer),
-        readerSdp: this.isReader ? JSON.stringify(offer) : undefined
-      });
-      
-      return offer;
     } catch (error) {
       console.error('Error creating offer:', error);
       throw error;
     }
   }
-  
-  // Update session status
-  private async updateSessionStatus(status: string, additionalData: any = {}) {
-    if (!this.sessionId) return;
-    
-    try {
-      await fetch(`/api/webrtc/sessions/${this.sessionId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status,
-          ...additionalData
-        }),
-      });
-    } catch (error) {
-      console.error('Error updating session status:', error);
-    }
-  }
-  
-  // Handle disconnection
-  private handleDisconnection() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-      
-      // Try to reconnect after a delay
-      setTimeout(() => {
-        this.restartIce();
-      }, 1000 * this.reconnectAttempts);
-    } else {
-      console.log('Max reconnect attempts reached, ending call');
-      this.onDisconnectCallbacks.forEach(callback => callback());
-    }
-  }
-  
-  // Restart ICE connection
-  private async restartIce() {
+
+  private async createAnswer(offer: RTCSessionDescriptionInit): Promise<void> {
     if (!this.peerConnection) return;
-    
+
     try {
-      const offer = await this.peerConnection.createOffer({ iceRestart: true });
-      await this.peerConnection.setLocalDescription(offer);
-      await this.sendSignal({
-        type: 'offer',
-        data: offer
+      await this.peerConnection.setRemoteDescription(offer);
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+
+      // Send answer through socket
+      this.socket?.emit('webrtc_signal', {
+        sessionId: this.sessionId,
+        signal: {
+          type: 'answer',
+          data: answer
+        }
       });
     } catch (error) {
-      console.error('Error restarting ICE:', error);
-      this.onDisconnectCallbacks.forEach(callback => callback());
+      console.error('Error creating answer:', error);
+      throw error;
     }
   }
-  
-  // Send data through data channel
-  public sendData(message: any) {
-    if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
-      console.error('Data channel not ready');
-      return false;
-    }
-    
-    try {
+
+  private setupDataChannel(channel: RTCDataChannel): void {
+    this.dataChannel = channel;
+
+    channel.onopen = () => {
+      console.log('Data channel opened');
+    };
+
+    channel.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        this.onMessageCallback?.(message);
+      } catch (error) {
+        console.error('Error parsing data channel message:', error);
+      }
+    };
+
+    channel.onclose = () => {
+      console.log('Data channel closed');
+    };
+  }
+
+  // Send chat message
+  sendMessage(content: string, type: string = 'text'): void {
+    if (!this.sessionId || !this.socket) return;
+
+    const message = {
+      sessionId: this.sessionId,
+      content,
+      type,
+      timestamp: new Date().toISOString()
+    };
+
+    // Send via data channel if available
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
       this.dataChannel.send(JSON.stringify(message));
-      return true;
+    }
+
+    // Also send via socket as backup
+    this.socket.emit('session_message', message);
+  }
+
+  // Toggle media devices
+  toggleAudio(): boolean {
+    if (!this.localStream) return false;
+    
+    const audioTrack = this.localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      return audioTrack.enabled;
+    }
+    return false;
+  }
+
+  toggleVideo(): boolean {
+    if (!this.localStream) return false;
+    
+    const videoTrack = this.localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      return videoTrack.enabled;
+    }
+    return false;
+  }
+
+  // End session
+  async endSession(): Promise<void> {
+    try {
+      if (this.sessionId) {
+        const response = await fetch('/api/sessions/end', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          },
+          body: JSON.stringify({ sessionId: this.sessionId })
+        });
+
+        if (!response.ok) {
+          console.error('Failed to end session on server');
+        }
+      }
+
+      this.cleanup();
     } catch (error) {
-      console.error('Error sending data:', error);
-      return false;
+      console.error('Error ending session:', error);
+      this.cleanup();
     }
   }
-  
-  // Clean up resources
-  public cleanup() {
-    // Stop polling
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
-    
-    // Close data channel
-    if (this.dataChannel) {
-      this.dataChannel.close();
-      this.dataChannel = null;
-    }
-    
+
+  private cleanup(): void {
     // Close peer connection
     if (this.peerConnection) {
       this.peerConnection.close();
       this.peerConnection = null;
     }
-    
-    // Stop local stream tracks
+
+    // Stop local stream
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
       this.localStream = null;
     }
-    
-    // Clear remote stream
-    this.remoteStream = null;
-    
-    // Reset state
+
+    // Close data channel
+    if (this.dataChannel) {
+      this.dataChannel.close();
+      this.dataChannel = null;
+    }
+
+    // Leave session room
+    if (this.socket && this.sessionId) {
+      this.socket.emit('leave_session_room', this.sessionId);
+    }
+
     this.sessionId = null;
-    this.userId = null;
-    this.peerId = null;
-    this.reconnectAttempts = 0;
+    this.isInitiator = false;
   }
-  
-  // Event registration methods
-  public onTrack(callback: (stream: MediaStream) => void) {
-    this.onTrackCallbacks.push(callback);
-    // If we already have a remote stream, call the callback immediately
-    if (this.remoteStream) {
-      callback(this.remoteStream);
+
+  // Event handlers
+  private handleSessionRequest(data: any): void {
+    // Handle incoming session request (for readers)
+    console.log('Session request received:', data);
+  }
+
+  private handleSessionResponse(data: any): void {
+    // Handle session response (for clients)
+    console.log('Session response received:', data);
+  }
+
+  private handleSessionStarted(data: any): void {
+    console.log('Session started:', data);
+  }
+
+  private handleSessionEnded(data: any): void {
+    console.log('Session ended:', data);
+    this.onSessionEndedCallback?.(data);
+    this.cleanup();
+  }
+
+  private async handleWebRTCSignal(data: { sessionId: string; fromUserId: string; signal: WebRTCSignal }): Promise<void> {
+    if (data.sessionId !== this.sessionId) return;
+
+    try {
+      switch (data.signal.type) {
+        case 'offer':
+          await this.createAnswer(data.signal.data);
+          break;
+        case 'answer':
+          if (this.peerConnection) {
+            await this.peerConnection.setRemoteDescription(data.signal.data);
+          }
+          break;
+        case 'ice_candidate':
+          if (this.peerConnection) {
+            await this.peerConnection.addIceCandidate(data.signal.data);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('Error handling WebRTC signal:', error);
     }
   }
-  
-  public onDataChannelMessage(callback: (message: any) => void) {
-    this.onDataChannelMessageCallbacks.push(callback);
+
+  private handleBillingUpdate(data: BillingUpdate): void {
+    this.onBillingUpdateCallback?.(data);
   }
-  
-  public onConnectionStateChange(callback: (state: RTCPeerConnectionState) => void) {
-    this.onConnectionStateChangeCallbacks.push(callback);
-    // If we already have a connection state, call the callback immediately
-    if (this.peerConnection) {
-      callback(this.peerConnection.connectionState);
+
+  private handleNewMessage(message: any): void {
+    this.onMessageCallback?.(message);
+  }
+
+  private handleConnectionLoss(): void {
+    console.log('Connection lost, attempting to reconnect...');
+    // Implement reconnection logic if needed
+  }
+
+  // Event subscription methods
+  onLocalStream(callback: (stream: MediaStream) => void): void {
+    this.onLocalStreamCallback = callback;
+  }
+
+  onRemoteStream(callback: (stream: MediaStream) => void): void {
+    this.onRemoteStreamCallback = callback;
+  }
+
+  onMessage(callback: (message: any) => void): void {
+    this.onMessageCallback = callback;
+  }
+
+  onBillingUpdate(callback: (update: BillingUpdate) => void): void {
+    this.onBillingUpdateCallback = callback;
+  }
+
+  onSessionEnded(callback: (data: any) => void): void {
+    this.onSessionEndedCallback = callback;
+  }
+
+  onConnectionState(callback: (state: string) => void): void {
+    this.onConnectionStateCallback = callback;
+  }
+
+  // Wallet management
+  async addFunds(amount: number, paymentMethodId: string): Promise<void> {
+    try {
+      const response = await fetch('/api/payments/wallet-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          amount,
+          paymentMethodId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add funds');
+      }
+    } catch (error) {
+      console.error('Error adding funds:', error);
+      throw error;
     }
   }
-  
-  public onIceCandidate(callback: (candidate: RTCIceCandidate | null) => void) {
-    this.onIceCandidateCallbacks.push(callback);
+
+  // Get session messages
+  async getSessionMessages(sessionId: string): Promise<any[]> {
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/messages`, {
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get session messages');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting session messages:', error);
+      throw error;
+    }
   }
-  
-  public onDisconnect(callback: () => void) {
-    this.onDisconnectCallbacks.push(callback);
-  }
-  
-  // Getters
-  public getLocalStream() {
-    return this.localStream;
-  }
-  
-  public getRemoteStream() {
-    return this.remoteStream;
-  }
-  
-  public getConnectionState() {
-    return this.peerConnection?.connectionState || 'closed';
-  }
-  
-  public getIceConnectionState() {
-    return this.peerConnection?.iceConnectionState || 'closed';
-  }
-  
-  public getSignalingState() {
-    return this.peerConnection?.signalingState || 'closed';
+
+  // Get session history
+  async getSessionHistory(limit: number = 20, offset: number = 0): Promise<SessionData[]> {
+    try {
+      const response = await fetch(`/api/sessions/history?limit=${limit}&offset=${offset}`, {
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get session history');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting session history:', error);
+      throw error;
+    }
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 export const webrtcClient = new WebRTCClient();
-
-export default webrtcClient;

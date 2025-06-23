@@ -1,79 +1,150 @@
 import express from 'express';
-import { body } from 'express-validator';
-import { validate } from '../middleware/errorMiddleware.js';
-import { 
-  registerUser, 
-  loginUser, 
-  getMe, 
-  forgotPassword,
-  resetPassword,
-  updateDetails,
-  updatePassword,
-  logout,
-  verifyEmail,
-  resendVerificationEmail
+import {
+  signUp,
+  signIn,
+  signOut,
+  refreshToken,
+  getProfile,
+  updateProfile,
+  changePassword,
+  updateAvailability
 } from '../controllers/authController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { authMiddleware, requireAdmin } from '../middleware/authMiddleware.js';
+import { body, validationResult } from 'express-validator';
+import { StatusCodes } from 'http-status-codes';
 
 const router = express.Router();
 
-// Public routes
-router.post(
-  '/register',
+// Validation middleware
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      error: 'Validation failed',
+      details: errors.array()
+    });
+  }
+  next();
+};
+
+// Sign up new user
+router.post('/signup',
   [
-    body('email', 'Please include a valid email').isEmail(),
-    body('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 }),
-    body('firstName', 'First name is required').not().isEmpty(),
-    body('lastName', 'Last name is required').not().isEmpty(),
-    validate
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('fullName').isLength({ min: 2, max: 100 }).withMessage('Full name must be between 2 and 100 characters'),
+    body('role').optional().isIn(['client', 'reader']).withMessage('Role must be client or reader')
   ],
-  registerUser
+  handleValidationErrors,
+  signUp
 );
 
-router.post(
-  '/login',
+// Sign up reader (admin only)
+router.post('/signup/reader',
+  authMiddleware,
+  requireAdmin,
   [
-    body('email', 'Please include a valid email').isEmail(),
-    body('password', 'Password is required').exists(),
-    validate
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('fullName').isLength({ min: 2, max: 100 }).withMessage('Full name must be between 2 and 100 characters'),
+    body('specialties').optional().isArray().withMessage('Specialties must be an array'),
+    body('bio').optional().isLength({ max: 1000 }).withMessage('Bio must be 1000 characters or less'),
+    body('per_minute_rate_chat').optional().isInt({ min: 100, max: 10000 }).withMessage('Chat rate must be between $1-$100 per minute'),
+    body('per_minute_rate_phone').optional().isInt({ min: 100, max: 10000 }).withMessage('Phone rate must be between $1-$100 per minute'),
+    body('per_minute_rate_video').optional().isInt({ min: 100, max: 10000 }).withMessage('Video rate must be between $1-$100 per minute')
   ],
-  loginUser
+  handleValidationErrors,
+  (req, res, next) => {
+    req.body.role = 'reader';
+    next();
+  },
+  signUp
 );
 
-router.get('/verify-email/:token', verifyEmail);
-router.post('/resend-verification', [
-  body('email', 'Please include a valid email').isEmail(),
-  validate
-], resendVerificationEmail);
+// Sign in user
+router.post('/signin',
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').notEmpty().withMessage('Password is required')
+  ],
+  handleValidationErrors,
+  signIn
+);
 
-router.post('/forgot-password', [
-  body('email', 'Please include a valid email').isEmail(),
-  validate
-], forgotPassword);
+// Alternative login endpoint
+router.post('/login',
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').notEmpty().withMessage('Password is required')
+  ],
+  handleValidationErrors,
+  signIn
+);
 
-router.put('/reset-password/:resettoken', [
-  body('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 }),
-  body('confirmPassword', 'Passwords do not match').custom((value, { req }) => value === req.body.password),
-  validate
-], resetPassword);
+// Sign out user
+router.post('/signout', authMiddleware, signOut);
+router.post('/logout', authMiddleware, signOut);
 
-// Protected routes (require authentication)
-router.use(protect);
+// Refresh token
+router.post('/refresh',
+  [
+    body('refresh_token').notEmpty().withMessage('Refresh token is required')
+  ],
+  handleValidationErrors,
+  refreshToken
+);
 
-router.get('/me', getMe);
-router.put('/updatedetails', [
-  body('email', 'Please include a valid email').optional().isEmail(),
-  body('firstName', 'First name is required').optional().not().isEmpty(),
-  body('lastName', 'Last name is required').optional().not().isEmpty(),
-  validate
-], updateDetails);
+// Get current user profile
+router.get('/profile', authMiddleware, getProfile);
 
-router.put('/updatepassword', [
-  body('currentPassword', 'Current password is required').exists(),
-  body('newPassword', 'Please enter a password with 6 or more characters').isLength({ min: 6 }),
-  validate
-], updatePassword);
+// Update user profile
+router.put('/profile',
+  authMiddleware,
+  [
+    body('full_name').optional().isLength({ min: 2, max: 100 }).withMessage('Full name must be between 2 and 100 characters'),
+    body('bio').optional().isLength({ max: 1000 }).withMessage('Bio must be 1000 characters or less'),
+    body('phone').optional().isMobilePhone().withMessage('Valid phone number is required'),
+    body('timezone').optional().isString().withMessage('Timezone must be a string'),
+    body('specialties').optional().isArray().withMessage('Specialties must be an array'),
+    body('per_minute_rate_chat').optional().isInt({ min: 100, max: 10000 }).withMessage('Chat rate must be between $1-$100 per minute'),
+    body('per_minute_rate_phone').optional().isInt({ min: 100, max: 10000 }).withMessage('Phone rate must be between $1-$100 per minute'),
+    body('per_minute_rate_video').optional().isInt({ min: 100, max: 10000 }).withMessage('Video rate must be between $1-$100 per minute')
+  ],
+  handleValidationErrors,
+  updateProfile
+);
 
-router.post('/logout', logout);
+// Change password
+router.put('/password',
+  authMiddleware,
+  [
+    body('current_password').notEmpty().withMessage('Current password is required'),
+    body('new_password').isLength({ min: 8 }).withMessage('New password must be at least 8 characters')
+  ],
+  handleValidationErrors,
+  changePassword
+);
+
+// Update reader availability
+router.put('/availability',
+  authMiddleware,
+  [
+    body('is_online').isBoolean().withMessage('is_online must be a boolean value')
+  ],
+  handleValidationErrors,
+  updateAvailability
+);
+
+// Check authentication status
+router.get('/me', authMiddleware, (req, res) => {
+  res.status(StatusCodes.OK).json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      profile: req.user.profile
+    }
+  });
+});
 
 export default router;
