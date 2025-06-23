@@ -6,6 +6,12 @@ import Home from '@/pages/Home';
 import Login from '@/pages/Login';
 import Signup from '@/pages/Signup';
 import Dashboard from '@/pages/Dashboard';
+import About from '@/pages/About';
+import Readers from '@/pages/Readers';
+import Shop from '@/pages/Shop';
+import Live from '@/pages/Live';
+import Community from '@/pages/Community';
+import Policies from '@/pages/Policies';
 import ReadingInterface from '@/components/reading/ReadingInterface';
 import LiveStreamPage from '@/pages/live/LiveStreamPage';
 import NotFound from '@/pages/NotFound';
@@ -210,77 +216,42 @@ function App() {
                 {/* Reader routes */}
                 <Route path="/readers" element={
                   <Layout>
-                    <div className="min-h-screen py-12">
-                      <div className="max-w-7xl mx-auto px-4">
-                        <h1 className="font-['Alex_Brush'] text-5xl text-pink-500 text-center mb-8">
-                          Our Gifted Readers
-                        </h1>
-                        {/* Reader directory component would go here */}
-                      </div>
-                    </div>
+                    <Readers />
                   </Layout>
                 } />
                 
                 {/* Shop routes */}
                 <Route path="/shop" element={
                   <Layout>
-                    <div className="min-h-screen py-12">
-                      <div className="max-w-7xl mx-auto px-4">
-                        <h1 className="font-['Alex_Brush'] text-5xl text-pink-500 text-center mb-8">
-                          Spiritual Marketplace
-                        </h1>
-                        {/* Shop component would go here */}
-                      </div>
-                    </div>
+                    <Shop />
+                  </Layout>
+                } />
+                
+                {/* Live streams */}
+                <Route path="/live" element={
+                  <Layout>
+                    <Live />
                   </Layout>
                 } />
                 
                 {/* Community routes */}
                 <Route path="/community" element={
                   <Layout>
-                    <div className="min-h-screen py-12">
-                      <div className="max-w-7xl mx-auto px-4">
-                        <h1 className="font-['Alex_Brush'] text-5xl text-pink-500 text-center mb-8">
-                          Soul Tribe Community
-                        </h1>
-                        {/* Community forum component would go here */}
-                      </div>
-                    </div>
+                    <Community />
                   </Layout>
                 } />
                 
                 {/* About page */}
                 <Route path="/about" element={
                   <Layout>
-                    <div className="min-h-screen py-12">
-                      <div className="max-w-4xl mx-auto px-4">
-                        <div className="text-center mb-12">
-                          <h1 className="font-['Alex_Brush'] text-6xl text-pink-500 mb-8">
-                            About SoulSeer
-                          </h1>
-                          <div className="mb-8">
-                            <img 
-                              src="https://i.postimg.cc/s2ds9RtC/FOUNDER.jpg" 
-                              alt="Founder" 
-                              className="w-48 h-48 rounded-full mx-auto object-cover border-4 border-pink-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-8 text-white">
-                          <div className="font-['Playfair_Display'] text-lg leading-relaxed space-y-6">
-                            <p>
-                              At SoulSeer, we are dedicated to providing ethical, compassionate, and judgment-free spiritual guidance. Our mission is twofold: to offer clients genuine, heart-centered readings and to uphold fair, ethical standards for our readers.
-                            </p>
-                            <p>
-                              Founded by psychic medium Emilynn, SoulSeer was created as a response to the corporate greed that dominates many psychic platforms. Unlike other apps, our readers keep the majority of what they earn and play an active role in shaping the platform.
-                            </p>
-                            <p>
-                              SoulSeer is more than just an app—it's a soul tribe. A community of gifted psychics united by our life's calling: to guide, heal, and empower those who seek clarity on their journey.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <About />
+                  </Layout>
+                } />
+                
+                {/* Policies page */}
+                <Route path="/policies" element={
+                  <Layout>
+                    <Policies />
                   </Layout>
                 } />
                 
