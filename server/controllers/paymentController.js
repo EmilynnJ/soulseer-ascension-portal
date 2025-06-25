@@ -3,7 +3,6 @@ import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const supabase = getSupabase();
 
 // Create payment intent for wallet deposit
 export const createWalletDepositIntent = async (req, res) => {

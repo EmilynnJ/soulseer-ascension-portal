@@ -71,7 +71,7 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   // Handle duplicate field errors
-  if (err.code === '23505) { // PostgreSQL unique violation
+  if (err.code === '23505') { // PostgreSQL unique violation
     const field = err.detail.match(/\(([^)]+)\)/)[1];
     return res.status(400).json({
       success: false,

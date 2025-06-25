@@ -127,17 +127,19 @@ const Home = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative py-20 lg:py-32 overflow-hidden">
-        {/* Hero Background Image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: 'url(https://i.postimg.cc/tRLSgCPb/HERO-IMAGE-1.jpg)'
-          }}
-        ></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/80 via-gray-900/60 to-pink-900/80"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-pink-900/20"></div>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
+            {/* Hero Thumbnail Image */}
+            <div className="flex justify-center mb-8">
+              <img
+                src="https://i.postimg.cc/tRLSgCPb/HERO-IMAGE-1.jpg"
+                alt="SoulSeer Spiritual Guidance"
+                className="w-32 h-32 md:w-40 md:h-40 lg:w-48 lg:h-48 object-contain rounded-2xl shadow-2xl border-4 border-pink-500/30 hover:border-pink-500/60 transition-all duration-300"
+              />
+            </div>
+            
             <h1 className="font-['Alex_Brush'] text-6xl md:text-8xl lg:text-9xl text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 mb-6 animate-pulse">
               SoulSeer
             </h1>
@@ -149,7 +151,7 @@ const Home = () => {
             </h2>
             
             <p className="text-xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-              Join our soul tribe of gifted psychics and seekers. Experience live video readings, 
+              Join our soul tribe of gifted psychics and seekers. Experience live video readings,
               real-time chat sessions, and spiritual community like never before.
             </p>
             

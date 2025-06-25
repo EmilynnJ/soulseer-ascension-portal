@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useUser, useAuth, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import { 
   Menu, 
@@ -25,7 +26,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface LayoutProps {
@@ -45,53 +45,44 @@ const Layout = ({ children }: LayoutProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user, isSignedIn, isLoaded } = useUser();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          const response = await fetch('/api/auth/profile', {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-          });
-          
-          if (response.ok) {
-            const profile = await response.json();
-            setUserProfile(profile);
-          }
+        if (isSignedIn && user) {
+          // For now, create a basic profile from Clerk user data
+          // In production, you'd fetch additional profile data from your database
+          const profile: UserProfile = {
+            id: user.id,
+            email: user.primaryEmailAddress?.emailAddress || '',
+            full_name: user.fullName || user.firstName || 'User',
+            avatar_url: user.imageUrl,
+            role: 'client', // Default role - you'd fetch this from your database
+            wallet_balance: 0.00 // Default balance - you'd fetch this from your database
+          };
+          setUserProfile(profile);
+        } else {
+          setUserProfile(null);
         }
       } catch (error) {
-        console.error('Failed to fetch user profile:', error);
+        console.error('Failed to process user profile:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchUserProfile();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          setUserProfile(null);
-        } else if (event === 'SIGNED_IN' && session) {
-          fetchUserProfile();
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    if (isLoaded) {
+      fetchUserProfile();
+    }
+  }, [isSignedIn, user, isLoaded]);
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut();
       setUserProfile(null);
       navigate('/');
       toast.success('Logged out successfully');
@@ -171,9 +162,9 @@ const Layout = ({ children }: LayoutProps) => {
 
             {/* User Menu / Auth Buttons */}
             <div className="flex items-center space-x-4">
-              {!isLoading && (
+              {isLoaded && (
                 <>
-                  {userProfile ? (
+                  {isSignedIn && userProfile ? (
                     <div className="flex items-center space-x-4">
                       {/* Wallet Balance */}
                       <div className="hidden sm:flex items-center space-x-2 bg-gray-800/80 rounded-full px-3 py-1">
@@ -257,16 +248,16 @@ const Layout = ({ children }: LayoutProps) => {
                     </div>
                   ) : (
                     <div className="flex items-center space-x-4">
-                      <Link to="/login">
+                      <SignInButton mode="modal">
                         <Button variant="ghost" className="text-gray-300 hover:text-pink-400">
                           Sign In
                         </Button>
-                      </Link>
-                      <Link to="/signup">
+                      </SignInButton>
+                      <SignUpButton mode="modal">
                         <Button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700">
                           Get Started
                         </Button>
-                      </Link>
+                      </SignUpButton>
                     </div>
                   )}
                 </>

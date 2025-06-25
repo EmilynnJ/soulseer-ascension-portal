@@ -1,4 +1,4 @@
- USE!import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
@@ -6,7 +6,7 @@ dotenv.config();
 
 // Neon database configuration
 const neonConfig = {
-  connectionString: process.env.NEON_DATABASE_URL,
+  connectionString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 };
 

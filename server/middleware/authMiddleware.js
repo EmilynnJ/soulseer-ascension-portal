@@ -1,10 +1,9 @@
 import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 
-const supabase = getSupabase();
-
 export const authMiddleware = async (req, res, next) => {
   try {
+    const supabase = getSupabase();
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from 'next-themes';
+import { SignedIn, SignedOut, useAuth } from '@clerk/clerk-react';
 import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
@@ -16,8 +17,7 @@ import ReadingInterface from '@/components/reading/ReadingInterface';
 import LiveStreamPage from '@/pages/live/LiveStreamPage';
 import NotFound from '@/pages/NotFound';
 import { WebRTCProvider } from '@/contexts/WebRTCContext';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Create a client
@@ -30,46 +30,11 @@ const queryClient = new QueryClient({
   },
 });
 
-// Auth guard component
+// Auth guard component using Clerk
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isSignedIn, isLoaded } = useAuth();
   
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Auth check error:', error);
-          setIsAuthenticated(false);
-        } else {
-          setIsAuthenticated(!!session);
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuth();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
-      }
-    );
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-  
-  if (isLoading) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -82,42 +47,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  return isSignedIn ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 // Public route component (redirects to dashboard if authenticated)
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isSignedIn, isLoaded } = useAuth();
   
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuth();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
-      }
-    );
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-  
-  if (isLoading) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -130,7 +67,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>;
+  return isSignedIn ? <Navigate to="/dashboard" replace /> : <>{children}</>;
 };
 
 function App() {

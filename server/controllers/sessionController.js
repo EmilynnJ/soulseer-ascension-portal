@@ -1,8 +1,7 @@
+
 import { enhancedWebRTCService } from '../services/enhancedWebrtcService.js';
 import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
-
-const supabase = getSupabase();
 
 // Request a new reading session
 export const requestSession = async (req, res) => {

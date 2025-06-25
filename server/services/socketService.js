@@ -1,8 +1,6 @@
 import { enhancedWebRTCService } from './enhancedWebrtcService.js';
 import { getSupabase } from '../config/supabase.js';
 
-const supabase = getSupabase();
-
 // Store connected users and their socket IDs
 const connectedUsers = new Map();
 const userSockets = new Map();
@@ -14,6 +12,7 @@ export const initSocket = (io) => {
     // Authenticate socket connection
     socket.on('authenticate', async (data) => {
       try {
+        const supabase = getSupabase();
         const { token, userId } = data;
         
         if (!token || !userId) {
@@ -98,6 +97,7 @@ export const initSocket = (io) => {
         }
 
         // Verify user is part of the session
+        const supabase = getSupabase();
         const { data: session } = await supabase
           .from('reading_sessions')
           .select('client_id, reader_id, status')
@@ -165,6 +165,7 @@ export const initSocket = (io) => {
         const { isAvailable } = data;
         
         // Update reader availability
+        const supabase = getSupabase();
         await supabase
           .from('user_profiles')
           .update({ is_online: isAvailable })
@@ -223,9 +224,10 @@ export const initSocket = (io) => {
       if (socket.userId) {
         try {
           // Update user offline status
+          const supabase = getSupabase();
           await supabase
             .from('user_profiles')
-            .update({ 
+            .update({
               is_online: false,
               last_seen: new Date().toISOString()
             })
@@ -269,6 +271,7 @@ export const initSocket = (io) => {
         connectedUsers.delete(userId);
         
         // Update database
+        const supabase = getSupabase();
         supabase
           .from('user_profiles')
           .update({ is_online: false })

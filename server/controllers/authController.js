@@ -3,11 +3,10 @@ import { StatusCodes } from 'http-status-codes';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const supabase = getSupabase();
-
 // Sign up new user
 export const signUp = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { email, password, fullName, role = 'client' } = req.body;
 
     // Validate input
@@ -132,6 +131,7 @@ export const signUp = async (req, res) => {
 // Sign in user
 export const signIn = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -202,6 +202,7 @@ export const signIn = async (req, res) => {
 // Sign out user
 export const signOut = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const userId = req.user?.id;
 
     if (userId) {
@@ -233,6 +234,7 @@ export const signOut = async (req, res) => {
 // Refresh token
 export const refreshToken = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { refresh_token } = req.body;
 
     if (!refresh_token) {
@@ -270,6 +272,7 @@ export const refreshToken = async (req, res) => {
 // Get current user profile
 export const getProfile = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const userId = req.user.id;
 
     const { data: profile, error } = await supabase
@@ -297,6 +300,7 @@ export const getProfile = async (req, res) => {
 // Update user profile
 export const updateProfile = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const userId = req.user.id;
     const allowedFields = [
       'full_name', 'bio', 'avatar_url', 'phone', 'timezone', 
@@ -364,6 +368,7 @@ export const updateProfile = async (req, res) => {
 // Change password
 export const changePassword = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { current_password, new_password } = req.body;
     const userId = req.user.id;
 
@@ -419,6 +424,7 @@ export const changePassword = async (req, res) => {
 // Update reader availability
 export const updateAvailability = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { is_online } = req.body;
     const userId = req.user.id;
 
