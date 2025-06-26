@@ -6,7 +6,6 @@ import jwt from 'jsonwebtoken';
 // Sign up new user
 export const signUp = async (req, res) => {
   try {
-    const supabase = getSupabase();
     const { email, password, fullName, role = 'client' } = req.body;
 
     // Validate input
@@ -18,7 +17,7 @@ export const signUp = async (req, res) => {
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.(email)) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         error: 'Invalid email format'
       });
