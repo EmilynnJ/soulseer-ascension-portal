@@ -13,7 +13,8 @@ import {
   Video,
   ShoppingBag,
   Users,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Radio
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -103,6 +104,7 @@ const Layout = ({ children }: LayoutProps) => {
   const navItems = [
     { path: '/', label: 'Home', icon: HomeIcon },
     { path: '/readers', label: 'Readers', icon: Star },
+    { path: '/live', label: 'Live', icon: Radio },
     { path: '/shop', label: 'Shop', icon: ShoppingBag },
     { path: '/community', label: 'Community', icon: Users },
     { path: '/about', label: 'About', icon: MessageCircle },
@@ -360,6 +362,7 @@ const Layout = ({ children }: LayoutProps) => {
               <h3 className="text-white font-medium mb-4">Platform</h3>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li><Link to="/readers" className="hover:text-pink-400">Find Readers</Link></li>
+                <li><Link to="/live" className="hover:text-pink-400">Live Sessions</Link></li>
                 <li><Link to="/shop" className="hover:text-pink-400">Shop</Link></li>
                 <li><Link to="/community" className="hover:text-pink-400">Community</Link></li>
                 <li><Link to="/about" className="hover:text-pink-400">About</Link></li>
@@ -370,8 +373,7 @@ const Layout = ({ children }: LayoutProps) => {
               <h3 className="text-white font-medium mb-4">Support</h3>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li><a href="mailto:support@soulseer.com" className="hover:text-pink-400">Contact Support</a></li>
-                <li><a href="/terms" className="hover:text-pink-400">Terms of Service</a></li>
-                <li><a href="/privacy" className="hover:text-pink-400">Privacy Policy</a></li>
+                <li><Link to="/policies" className="hover:text-pink-400">Terms & Policies</Link></li>
                 <li><a href="/help" className="hover:text-pink-400">Help Center</a></li>
               </ul>
             </div>
