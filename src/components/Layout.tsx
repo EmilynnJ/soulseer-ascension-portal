@@ -25,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface LayoutProps {
@@ -51,7 +50,6 @@ const Layout = ({ children }: LayoutProps) => {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
           const response = await fetch('/api/auth/profile', {
@@ -74,7 +72,6 @@ const Layout = ({ children }: LayoutProps) => {
 
     fetchUserProfile();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_OUT') {
           setUserProfile(null);
@@ -91,7 +88,6 @@ const Layout = ({ children }: LayoutProps) => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
       setUserProfile(null);
       navigate('/');
       toast.success('Logged out successfully');

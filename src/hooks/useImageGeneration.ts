@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 export const useImageGeneration = () => {
   const [loading, setLoading] = useState(false);
@@ -10,7 +9,6 @@ export const useImageGeneration = () => {
     setError(null);
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('generate-image', {
         body: { prompt }
       });
 

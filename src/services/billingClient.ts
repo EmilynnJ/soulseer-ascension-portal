@@ -1,4 +1,3 @@
-import { supabase } from '@/lib/supabase';
 
 // Define types
 export type BillingEvent = {

@@ -23,7 +23,6 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface LiveStream {
@@ -145,7 +144,6 @@ const LiveStreamPage = () => {
 
   const fetchUserProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
         const response = await fetch('/api/auth/profile', {

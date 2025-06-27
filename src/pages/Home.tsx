@@ -17,7 +17,6 @@ import {
   Play,
   Sparkles
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 interface FeaturedReader {
   id: string;
@@ -55,7 +54,6 @@ const Home = () => {
   };
 
   const handleGetStarted = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       navigate('/dashboard');
     } else {

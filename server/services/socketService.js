@@ -1,7 +1,5 @@
 import { enhancedWebRTCService } from './enhancedWebrtcService.js';
-import { getSupabase } from '../config/supabase.js';
 
-const supabase = getSupabase();
 
 // Store connected users and their socket IDs
 const connectedUsers = new Map();
@@ -22,7 +20,6 @@ export const initSocket = (io) => {
         }
 
         // Verify token with Supabase
-        const { data: { user }, error } = await supabase.auth.getUser(token);
         
         if (error || !user || user.id !== userId) {
           socket.emit('auth_error', { error: 'Invalid authentication' });
@@ -42,7 +39,6 @@ export const initSocket = (io) => {
         socket.join(`user_${userId}`);
 
         // Update user online status in database
-        await supabase
           .from('user_profiles')
           .update({ 
             is_online: true,
@@ -98,7 +94,6 @@ export const initSocket = (io) => {
         }
 
         // Verify user is part of the session
-        const { data: session } = await supabase
           .from('reading_sessions')
           .select('client_id, reader_id, status')
           .eq('id', sessionId)
@@ -165,7 +160,6 @@ export const initSocket = (io) => {
         const { isAvailable } = data;
         
         // Update reader availability
-        await supabase
           .from('user_profiles')
           .update({ is_online: isAvailable })
           .eq('user_id', socket.userId);
@@ -223,7 +217,6 @@ export const initSocket = (io) => {
       if (socket.userId) {
         try {
           // Update user offline status
-          await supabase
             .from('user_profiles')
             .update({ 
               is_online: false,
@@ -269,7 +262,6 @@ export const initSocket = (io) => {
         connectedUsers.delete(userId);
         
         // Update database
-        supabase
           .from('user_profiles')
           .update({ is_online: false })
           .eq('user_id', userId)

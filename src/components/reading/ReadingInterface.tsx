@@ -21,7 +21,6 @@ import {
   Settings
 } from 'lucide-react';
 import { webrtcClient, SessionData, BillingUpdate } from '@/services/webrtcClient';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface Message {
@@ -105,7 +104,6 @@ export const ReadingInterface: React.FC = () => {
       setIsLoading(true);
       
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         navigate('/login');
         return;
@@ -113,7 +111,6 @@ export const ReadingInterface: React.FC = () => {
       setCurrentUser(user);
 
       // Get user profile for balance
-      const { data: profile } = await supabase
         .from('user_profiles')
         .select('balance')
         .eq('user_id', user.id)
@@ -124,7 +121,6 @@ export const ReadingInterface: React.FC = () => {
       }
 
       // Get session data
-      const { data: sessionData, error: sessionError } = await supabase
         .from('reading_sessions')
         .select(`
           *,
@@ -287,7 +283,6 @@ export const ReadingInterface: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
           sessionId,

@@ -20,7 +20,6 @@ import {
   Heart,
   Sparkles
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface SignupFormData {
@@ -114,7 +113,6 @@ const Signup = () => {
       }
 
       // Sign up with Supabase
-      const { data, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -183,7 +181,6 @@ const Signup = () => {
   const handleGoogleSignUp = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/dashboard`

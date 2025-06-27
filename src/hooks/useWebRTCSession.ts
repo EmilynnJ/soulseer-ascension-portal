@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { webrtcService } from '@/services/webrtc';
 
 type SessionConfig = {
@@ -43,12 +42,9 @@ export const useWebRTCSession = (config: SessionConfig) => {
       setError(null);
       
       // Create a new session in the database
-      const { data: session, error: sessionError } = await supabase
         .from('sessions')
         .insert([
           {
-            client_id: isReader ? null : (await supabase.auth.getUser()).data.user?.id,
-            reader_id: isReader ? (await supabase.auth.getUser()).data.user?.id : readerId,
             status: 'pending',
             session_type: sessionType,
             rate: ratePerMinute,
@@ -111,12 +107,10 @@ export const useWebRTCSession = (config: SessionConfig) => {
       const offer = await webrtcService.createOffer();
       
       // Send the offer to the reader via Supabase Realtime
-      const { error } = await supabase
         .from('rtc_sessions')
         .upsert(
           {
             session_id: sessionId,
-            client_id: (await supabase.auth.getUser()).data.user?.id,
             reader_id: readerId,
             client_sdp: JSON.stringify(offer),
             status: 'connecting',
@@ -146,7 +140,6 @@ export const useWebRTCSession = (config: SessionConfig) => {
       const answer = await webrtcService.createAnswer();
       
       // Send the answer back to the client via Supabase Realtime
-      const { error } = await supabase
         .from('rtc_sessions')
         .update({
           reader_sdp: JSON.stringify(answer),
@@ -197,7 +190,6 @@ export const useWebRTCSession = (config: SessionConfig) => {
       
       // Update session status in the database
       if (sessionId) {
-        await supabase
           .from('sessions')
           .update({
             status: 'completed',
@@ -210,7 +202,6 @@ export const useWebRTCSession = (config: SessionConfig) => {
           .eq('id', sessionId);
         
         // Update RTC session status
-        await supabase
           .from('rtc_sessions')
           .update({
             status: 'completed',
@@ -266,7 +257,6 @@ export const useWebRTCSession = (config: SessionConfig) => {
   useEffect(() => {
     if (!sessionId) return;
     
-    const channel = supabase.channel(`session_${sessionId}`);
     
     // Subscribe to ICE candidates
     channel
@@ -287,7 +277,6 @@ export const useWebRTCSession = (config: SessionConfig) => {
   useEffect(() => {
     if (!isReader || !readerId) return;
     
-    const channel = supabase.channel(`reader_${readerId}`);
     
     // Subscribe to new session requests
     channel

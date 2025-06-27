@@ -17,7 +17,6 @@ import LiveStreamPage from '@/pages/live/LiveStreamPage';
 import NotFound from '@/pages/NotFound';
 import { WebRTCProvider } from '@/contexts/WebRTCContext';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Create a client
@@ -38,7 +37,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Auth check error:', error);
@@ -56,7 +54,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     
     checkAuth();
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, !!session);
         setIsAuthenticated(!!session);
@@ -93,7 +90,6 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
         setIsAuthenticated(!!session);
       } catch (error) {
         console.error('Auth check failed:', error);
@@ -105,7 +101,6 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     
     checkAuth();
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setIsAuthenticated(!!session);
         setIsLoading(false);

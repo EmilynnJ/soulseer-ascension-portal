@@ -1,8 +1,6 @@
 import { enhancedWebRTCService } from '../services/enhancedWebrtcService.js';
-import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 
-const supabase = getSupabase();
 
 // Request a new reading session
 export const requestSession = async (req, res) => {
@@ -32,7 +30,6 @@ export const requestSession = async (req, res) => {
     }
 
     // Check if client has any pending sessions
-    const { data: pendingSessions } = await supabase
       .from('reading_sessions')
       .select('id')
       .eq('client_id', clientId)
@@ -130,7 +127,6 @@ export const endSession = async (req, res) => {
     }
 
     // Verify user is part of the session
-    const { data: session } = await supabase
       .from('reading_sessions')
       .select('client_id, reader_id, status')
       .eq('id', sessionId)
@@ -259,7 +255,6 @@ export const getSessionDetails = async (req, res) => {
       });
     }
 
-    const { data: session, error } = await supabase
       .from('reading_sessions')
       .select(`
         *,
@@ -323,7 +318,6 @@ export const rateSession = async (req, res) => {
     }
 
     // Get session details
-    const { data: session, error: sessionError } = await supabase
       .from('reading_sessions')
       .select('client_id, reader_id, status')
       .eq('id', sessionId)
@@ -358,7 +352,6 @@ export const rateSession = async (req, res) => {
     }
 
     // Update session rating
-    const { error: updateError } = await supabase
       .from('reading_sessions')
       .update({
         [updateField]: rating,
@@ -373,7 +366,6 @@ export const rateSession = async (req, res) => {
     // Update overall reader rating if this is a client rating
     if (updateField === 'client_rating') {
       // Calculate new average rating for the reader
-      const { data: readerSessions } = await supabase
         .from('reading_sessions')
         .select('client_rating')
         .eq('reader_id', targetUserId)
@@ -384,7 +376,6 @@ export const rateSession = async (req, res) => {
         const totalRating = readerSessions.reduce((sum, s) => sum + s.client_rating, 0);
         const averageRating = totalRating / readerSessions.length;
 
-        await supabase
           .from('user_profiles')
           .update({
             rating: averageRating,
@@ -408,7 +399,6 @@ export const getAvailableReaders = async (req, res) => {
   try {
     const { specialty, sortBy = 'rating', order = 'desc', limit = 20, offset = 0 } = req.query;
 
-    let query = supabase
       .from('user_profiles')
       .select(`
         id,

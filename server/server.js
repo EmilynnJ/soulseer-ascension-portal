@@ -13,7 +13,6 @@ import authRoutes from './routes/authRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { initSocket } from './services/socketService.js';
-import { initializeSupabase } from './config/supabase.js';
 import Stripe from 'stripe';
 
 // Load environment variables

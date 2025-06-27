@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
 import AdminDashboard from './dashboard/AdminDashboard';
 import ReaderDashboard from './dashboard/ReaderDashboard';
 import ClientDashboard from './dashboard/ClientDashboard';
@@ -25,14 +24,12 @@ const Dashboard: React.FC = () => {
 
   const loadUserData = async () => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
         navigate('/login');
         return;
       }
 
       // Get user profile
-      const { data: profile, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)

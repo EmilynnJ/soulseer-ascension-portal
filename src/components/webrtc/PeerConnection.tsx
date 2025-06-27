@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWebRTC } from '@/contexts/WebRTCContext';
-import { supabase } from '@/lib/supabase';
 
 type PeerConnectionProps = {
   roomId: string;
@@ -25,7 +24,6 @@ export const PeerConnection: React.FC<PeerConnectionProps> = ({
   useEffect(() => {
     if (!roomId) return;
 
-    const channel = supabase.channel(`room_${roomId}`);
 
     channel
       .on('broadcast', { event: 'signal' }, (payload) => {
@@ -75,7 +73,6 @@ export const PeerConnection: React.FC<PeerConnectionProps> = ({
 
   const sendSignal = async (to: string, type: string, data: any) => {
     try {
-      const { error } = await supabase.channel(`room_${roomId}`).send({
         type: 'broadcast',
         event: 'signal',
         payload: {

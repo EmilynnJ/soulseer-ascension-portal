@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Star, MessageCircle, Phone, Video, Search, Filter, Heart, Clock, DollarSign } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
 interface Reader {

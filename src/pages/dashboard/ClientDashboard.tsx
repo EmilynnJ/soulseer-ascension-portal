@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DollarSign, Clock, Heart, Star, Phone, Video, MessageCircle, CreditCard, History, User, Gift } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -80,7 +79,6 @@ const ClientDashboard: React.FC = () => {
 
   const loadClientData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       await Promise.all([
@@ -97,7 +95,6 @@ const ClientDashboard: React.FC = () => {
 
   const loadProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -113,14 +110,12 @@ const ClientDashboard: React.FC = () => {
   const loadStats = async (userId: string) => {
     try {
       // Get sessions for stats calculation
-      const { data: sessions } = await supabase
         .from('sessions')
         .select('total_cost, created_at, duration_minutes')
         .eq('client_id', userId)
         .eq('status', 'completed');
 
       // Get wallet balance
-      const { data: profile } = await supabase
         .from('users')
         .select('wallet_balance')
         .eq('id', userId)
@@ -154,7 +149,6 @@ const ClientDashboard: React.FC = () => {
 
   const loadSessions = async (userId: string) => {
     try {
-      const { data, error } = await supabase
         .from('sessions')
         .select(`
           *,
@@ -182,7 +176,6 @@ const ClientDashboard: React.FC = () => {
   const loadFavoriteReaders = async (userId: string) => {
     try {
       // Get favorite readers (simplified - would need proper favorites table)
-      const { data: favoriteSessions } = await supabase
         .from('sessions')
         .select('reader_id')
         .eq('client_id', userId)
@@ -201,7 +194,6 @@ const ClientDashboard: React.FC = () => {
           .map(([readerId]) => readerId);
 
         if (topReaderIds.length > 0) {
-          const { data: readers } = await supabase
             .from('users')
             .select('*')
             .in('id', topReaderIds)
@@ -225,10 +217,8 @@ const ClientDashboard: React.FC = () => {
 
       // This would integrate with Stripe for actual payment processing
       // For now, we'll simulate adding funds
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
         .from('users')
         .update({ 
           wallet_balance: (profile?.wallet_balance || 0) + amount 

@@ -1,7 +1,5 @@
-import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 
-const supabase = getSupabase();
 
 export const authMiddleware = async (req, res, next) => {
   try {
@@ -16,7 +14,6 @@ export const authMiddleware = async (req, res, next) => {
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Verify the JWT token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
       return res.status(StatusCodes.UNAUTHORIZED).json({
@@ -25,7 +22,6 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     // Get user profile from database
-    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', user.id)

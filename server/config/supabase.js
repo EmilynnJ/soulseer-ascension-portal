@@ -1,17 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 // Initialize Supabase client
-let supabase;
 
 export const initializeSupabase = () => {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     throw new Error('Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file.');
   }
   
-  supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_ANON_KEY,
     {
@@ -21,15 +18,12 @@ export const initializeSupabase = () => {
     }
   );
   
-  return supabase;
 };
 
 // Get the Supabase client
 export const getSupabase = () => {
-  if (!supabase) {
     throw new Error('Supabase client has not been initialized. Call initializeSupabase() first.');
   }
-  return supabase;
 };
 
 // Auth functions

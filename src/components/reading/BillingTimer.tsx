@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { formatTime, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -36,7 +35,6 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   // Update billing in the database
   const updateBilling = async (durationSec: number, amount: number) => {
     try {
-      const { error } = await supabase.from('billing_events').insert([
         {
           session_id: sessionId,
           event_type: 'tick',
@@ -62,10 +60,8 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   // Update user balance in the database
   const updateUserBalance = async (newBalance: number) => {
     try {
-      const { error } = await supabase
         .from('profiles')
         .update({ balance: newBalance })
-        .eq('id', (await supabase.auth.getUser()).data.user?.id);
       
       if (error) throw error;
       
@@ -154,7 +150,6 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   const handleAddFunds = async () => {
     try {
       // Create a Stripe Checkout session
-      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { amount: 2000 }, // $20.00 in cents
       });
       

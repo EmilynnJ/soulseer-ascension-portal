@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Video, VideoOff, Gift, Users, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
 import webrtcClient from '@/services/webrtcClient';
 
@@ -86,14 +85,12 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
           }
           
           // Update stream status in database
-          await supabase
             .from('live_streams')
             .update({ status: 'active', started_at: new Date().toISOString() })
             .eq('id', streamId);
         }
         
         // Join stream room
-        const room = supabase.channel(`stream_${streamId}`);
         
         // Listen for messages
         room
@@ -119,7 +116,6 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
           })
           .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-              await room.track({ user: supabase.auth.getUser() });
             }
           });
         
@@ -204,7 +200,6 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
     const userName = isHost ? readerName : 'Viewer'; // In a real app, get actual user name
     
     // Send message to channel
-    const channel = supabase.channel(`stream_${streamId}`);
     channel.send({
       type: 'broadcast',
       event: 'message',
@@ -224,7 +219,6 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
       // In a real app, check user balance first
       
       // Process payment
-      const { data, error } = await supabase.functions.invoke('process-gift', {
         body: {
           streamId,
           readerId,
@@ -236,7 +230,6 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
       if (error) throw error;
       
       // Send gift to channel
-      const channel = supabase.channel(`stream_${streamId}`);
       channel.send({
         type: 'broadcast',
         event: 'gift',
@@ -280,7 +273,6 @@ export const LiveStream: React.FC<LiveStreamProps> = ({
     try {
       if (isHost) {
         // Update stream status
-        await supabase
           .from('live_streams')
           .update({
             status: 'ended',

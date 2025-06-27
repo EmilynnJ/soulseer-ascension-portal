@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getSupabase } from '../config/supabase.js';
 import Stripe from 'stripe';
 import { io } from '../server.js';
 
@@ -13,14 +12,12 @@ export class EnhancedWebRTCService {
   constructor() {
     this.activeSessions = activeSessions;
     this.billingTimers = billingTimers;
-    this.supabase = getSupabase();
   }
 
   // Create a new reading session
   async createReadingSession(clientId, readerId, sessionType, ratePerMinute) {
     try {
       // Verify reader is available and get current rates
-      const { data: reader, error: readerError } = await this.supabase
         .from('user_profiles')
         .select('is_online, per_minute_rate_chat, per_minute_rate_phone, per_minute_rate_video')
         .eq('id', readerId)
@@ -51,7 +48,6 @@ export class EnhancedWebRTCService {
       }
 
       // Check client balance
-      const { data: client, error: clientError } = await this.supabase
         .from('user_profiles')
         .select('balance')
         .eq('id', clientId)
@@ -67,7 +63,6 @@ export class EnhancedWebRTCService {
       const sessionId = uuidv4();
 
       // Create session record
-      const { data: session, error: sessionError } = await this.supabase
         .from('reading_sessions')
         .insert({
           id: sessionId,
@@ -100,7 +95,6 @@ export class EnhancedWebRTCService {
   async respondToSession(sessionId, readerId, response) {
     try {
       // Verify session belongs to reader
-      const { data: session, error: sessionError } = await this.supabase
         .from('reading_sessions')
         .select('*')
         .eq('id', sessionId)
@@ -115,7 +109,6 @@ export class EnhancedWebRTCService {
       const newStatus = response === 'accept' ? 'accepted' : 'rejected';
       
       // Update session status
-      const { error: updateError } = await this.supabase
         .from('reading_sessions')
         .update({ 
           status: newStatus,
@@ -140,7 +133,6 @@ export class EnhancedWebRTCService {
   // Start a reading session and begin billing
   async startSession(sessionId, userId) {
     try {
-      const { data: session, error: sessionError } = await this.supabase
         .from('reading_sessions')
         .select('*')
         .eq('id', sessionId)
@@ -152,7 +144,6 @@ export class EnhancedWebRTCService {
       }
 
       // Update session to in_progress
-      const { error: updateError } = await this.supabase
         .from('reading_sessions')
         .update({
           status: 'in_progress',
@@ -206,7 +197,6 @@ export class EnhancedWebRTCService {
 
     try {
       // Check client balance
-      const { data: client, error: clientError } = await this.supabase
         .from('user_profiles')
         .select('balance')
         .eq('id', sessionData.client_id)
@@ -221,7 +211,6 @@ export class EnhancedWebRTCService {
       }
 
       // Deduct from client balance
-      const { error: clientUpdateError } = await this.supabase
         .from('user_profiles')
         .update({ balance: client.balance - ratePerMinute })
         .eq('id', sessionData.client_id);
@@ -232,7 +221,6 @@ export class EnhancedWebRTCService {
       const readerEarnings = ratePerMinute * 0.7;
       const platformFee = ratePerMinute * 0.3;
 
-      const { error: readerUpdateError } = await this.supabase
         .from('user_profiles')
         .update({ balance: sessionData.reader_balance + readerEarnings })
         .eq('id', sessionData.reader_id);
@@ -244,7 +232,6 @@ export class EnhancedWebRTCService {
       sessionData.lastBillingTime = new Date();
 
       // Update session in database
-      const { error: sessionUpdateError } = await this.supabase
         .from('reading_sessions')
         .update({
           duration_minutes: sessionData.totalMinutesCharged,
@@ -283,7 +270,6 @@ export class EnhancedWebRTCService {
       const endTime = new Date();
 
       // Update session in database
-      const { error: updateError } = await this.supabase
         .from('reading_sessions')
         .update({
           status: 'completed',
@@ -354,7 +340,6 @@ export class EnhancedWebRTCService {
   // Send chat message during session
   async sendMessage(sessionId, senderId, content, messageType = 'text') {
     try {
-      const session = await this.supabase
         .from('reading_sessions')
         .select('client_id, reader_id')
         .eq('id', sessionId)
@@ -370,7 +355,6 @@ export class EnhancedWebRTCService {
 
       // Store message in database
       const messageId = uuidv4();
-      const { data: message, error: messageError } = await this.supabase
         .from('messages')
         .insert({
           id: messageId,
@@ -400,7 +384,6 @@ export class EnhancedWebRTCService {
   // Get session history for user
   async getSessionHistory(userId, limit = 20, offset = 0) {
     try {
-      const { data, error } = await this.supabase
         .from('reading_sessions')
         .select(`
           *,
@@ -427,7 +410,6 @@ export class EnhancedWebRTCService {
   // Get active sessions for user
   async getActiveSessions(userId) {
     try {
-      const { data, error } = await this.supabase
         .from('reading_sessions')
         .select('*')
         .or(`client_id.eq.${userId},reader_id.eq.${userId}`)
@@ -443,7 +425,6 @@ export class EnhancedWebRTCService {
   // Process Stripe payment for wallet deposit
   async processWalletDeposit(userId, amount, paymentMethodId) {
     try {
-      const { data: user, error: userError } = await this.supabase
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
@@ -467,7 +448,6 @@ export class EnhancedWebRTCService {
 
       if (paymentIntent.status === 'succeeded') {
         // Update user balance
-        const { error: balanceError } = await this.supabase
           .from('user_profiles')
           .update({ balance: user.balance + amount })
           .eq('id', userId);
@@ -486,7 +466,6 @@ export class EnhancedWebRTCService {
   // Handle reader payout (daily automatic if balance > $15)
   async processReaderPayout(readerId) {
     try {
-      const { data: reader, error: readerError } = await this.supabase
         .from('user_profiles')
         .select('balance')
         .eq('id', readerId)
@@ -510,7 +489,6 @@ export class EnhancedWebRTCService {
       });
 
       // Update reader balance
-      const { error: balanceError } = await this.supabase
         .from('user_profiles')
         .update({ balance: 0 })
         .eq('id', readerId);
@@ -527,7 +505,6 @@ export class EnhancedWebRTCService {
   async getSessionMessages(sessionId, userId) {
     try {
       // Verify user is part of session
-      const { data: session, error: sessionError } = await this.supabase
         .from('reading_sessions')
         .select('*')
         .eq('id', sessionId)
@@ -538,7 +515,6 @@ export class EnhancedWebRTCService {
         throw new Error('Session not found or access denied');
       }
 
-      const { data: messages, error: messagesError } = await this.supabase
         .from('messages')
         .select(`
           *,

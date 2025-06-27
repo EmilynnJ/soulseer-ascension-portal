@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, DollarSign, Eye, UserPlus, Settings, BarChart3, AlertTriangle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface Reader {
@@ -84,17 +83,14 @@ const AdminDashboard: React.FC = () => {
   const loadStats = async () => {
     try {
       // Get user counts
-      const { count: totalUsers } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true });
 
-      const { count: totalReaders } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
         .eq('role', 'reader');
 
       // Get revenue data (placeholder - would need proper transactions table)
-      const { data: sessions } = await supabase
         .from('sessions')
         .select('total_cost, created_at');
 
@@ -105,7 +101,6 @@ const AdminDashboard: React.FC = () => {
         .reduce((sum, session) => sum + (session.total_cost || 0), 0) || 0;
 
       // Get active sessions
-      const { count: activeSessions } = await supabase
         .from('sessions')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
@@ -125,7 +120,6 @@ const AdminDashboard: React.FC = () => {
 
   const loadReaders = async () => {
     try {
-      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('role', 'reader')
@@ -142,7 +136,6 @@ const AdminDashboard: React.FC = () => {
     setIsLoading(true);
     try {
       // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: newReader.email,
         password: newReader.password,
         email_confirm: true,
@@ -154,7 +147,6 @@ const AdminDashboard: React.FC = () => {
       if (authError) throw authError;
 
       // Create user profile
-      const { error: profileError } = await supabase
         .from('users')
         .insert({
           id: authData.user.id,

@@ -1,9 +1,7 @@
-import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const supabase = getSupabase();
 
 // Sign up new user
 export const signUp = async (req, res) => {
@@ -47,7 +45,6 @@ export const signUp = async (req, res) => {
     }
 
     // Check if user already exists
-    const { data: existingUser } = await supabase.auth.admin.getUserByEmail(email);
     
     if (existingUser.user) {
       return res.status(StatusCodes.CONFLICT).json({
@@ -56,7 +53,6 @@ export const signUp = async (req, res) => {
     }
 
     // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true, // Auto-confirm for production
@@ -91,7 +87,6 @@ export const signUp = async (req, res) => {
       profileData.total_reviews = 0;
     }
 
-    const { error: profileError } = await supabase
       .from('user_profiles')
       .insert(profileData);
 
@@ -99,7 +94,6 @@ export const signUp = async (req, res) => {
       console.error('Profile creation error:', profileError);
       
       // Clean up auth user if profile creation fails
-      await supabase.auth.admin.deleteUser(authData.user.id);
       
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         error: 'Failed to create user profile'
@@ -107,7 +101,6 @@ export const signUp = async (req, res) => {
     }
 
     // Generate access token for immediate login
-    const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: email
     });
@@ -141,7 +134,6 @@ export const signIn = async (req, res) => {
     }
 
     // Sign in with Supabase
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
@@ -154,7 +146,6 @@ export const signIn = async (req, res) => {
     }
 
     // Get user profile
-    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', authData.user.id)
@@ -168,7 +159,6 @@ export const signIn = async (req, res) => {
     }
 
     // Update last login time
-    await supabase
       .from('user_profiles')
       .update({ 
         last_seen: new Date().toISOString(),
@@ -206,14 +196,12 @@ export const signOut = async (req, res) => {
 
     if (userId) {
       // Update user offline status
-      await supabase
         .from('user_profiles')
         .update({ is_online: false })
         .eq('user_id', userId);
     }
 
     // Sign out from Supabase
-    const { error } = await supabase.auth.signOut();
 
     if (error) {
       console.error('Sign out error:', error);
@@ -241,7 +229,6 @@ export const refreshToken = async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase.auth.refreshSession({
       refresh_token
     });
 
@@ -272,7 +259,6 @@ export const getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: profile, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
@@ -335,7 +321,6 @@ export const updateProfile = async (req, res) => {
 
     updateData.updated_at = new Date().toISOString();
 
-    const { data: profile, error } = await supabase
       .from('user_profiles')
       .update(updateData)
       .eq('user_id', userId)
@@ -380,9 +365,7 @@ export const changePassword = async (req, res) => {
     }
 
     // Verify current password by attempting to sign in
-    const { data: user } = await supabase.auth.admin.getUserById(userId);
     
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
       email: user.user.email,
       password: current_password
     });
@@ -394,7 +377,6 @@ export const changePassword = async (req, res) => {
     }
 
     // Update password
-    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
       password: new_password
     });
 
@@ -434,7 +416,6 @@ export const updateAvailability = async (req, res) => {
       });
     }
 
-    const { error } = await supabase
       .from('user_profiles')
       .update({ 
         is_online,

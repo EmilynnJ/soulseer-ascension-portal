@@ -8,7 +8,6 @@ import { SessionStatus } from '@/components/webrtc/SessionStatus';
 import { BillingTimer } from '@/components/webrtc/BillingTimer';
 import { CallInterface } from '@/components/webrtc/CallInterface';
 import { PeerConnection } from '@/components/webrtc/PeerConnection';
-import { supabase } from '@/lib/supabase';
 
 const ReadingSession = () => {
   const { id: sessionId } = useParams<{ id: string }>();
@@ -27,7 +26,6 @@ const ReadingSession = () => {
   const { data: session, error: sessionError } = useQuery({
     queryKey: ['session', sessionId],
     queryFn: async () => {
-      const { data, error } = await supabase
         .from('sessions')
         .select('*')
         .eq('id', sessionId)
@@ -43,10 +41,8 @@ const ReadingSession = () => {
   const { data: userProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       
-      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
@@ -122,7 +118,6 @@ const ReadingSession = () => {
   useEffect(() => {
     if (!isReader || !sessionId) return;
     
-    const channel = supabase.channel(`rtc_session_${sessionId}`);
     
     channel
       .on('postgres_changes', 

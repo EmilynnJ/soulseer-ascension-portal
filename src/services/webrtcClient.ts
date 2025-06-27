@@ -1,5 +1,4 @@
 import { io, Socket } from 'socket.io-client';
-import { supabase } from '@/lib/supabase';
 
 export interface SessionData {
   id: string;
@@ -59,7 +58,6 @@ export class WebRTCClient {
   }
 
   private async initializeSocket() {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     this.userId = user.id;
@@ -110,7 +108,6 @@ export class WebRTCClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
           readerId,
@@ -137,7 +134,6 @@ export class WebRTCClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
           sessionId,
@@ -179,7 +175,6 @@ export class WebRTCClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({ sessionId })
       });
@@ -373,7 +368,6 @@ export class WebRTCClient {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
           },
           body: JSON.stringify({ sessionId: this.sessionId })
         });
@@ -508,7 +502,6 @@ export class WebRTCClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({
           amount,
@@ -530,7 +523,6 @@ export class WebRTCClient {
     try {
       const response = await fetch(`/api/sessions/${sessionId}/messages`, {
         headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         }
       });
 
@@ -550,7 +542,6 @@ export class WebRTCClient {
     try {
       const response = await fetch(`/api/sessions/history?limit=${limit}&offset=${offset}`, {
         headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         }
       });
 

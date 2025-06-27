@@ -18,7 +18,6 @@ import {
   ThumbsUp,
   Pin
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 interface ForumPost {
   id: string;

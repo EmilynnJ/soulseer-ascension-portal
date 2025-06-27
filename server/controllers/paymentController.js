@@ -1,9 +1,7 @@
 import Stripe from 'stripe';
-import { getSupabase } from '../config/supabase.js';
 import { StatusCodes } from 'http-status-codes';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const supabase = getSupabase();
 
 // Create payment intent for wallet deposit
 export const createWalletDepositIntent = async (req, res) => {
@@ -24,7 +22,6 @@ export const createWalletDepositIntent = async (req, res) => {
     }
 
     // Get or create Stripe customer
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('stripe_customer_id, full_name')
       .eq('user_id', userId)
@@ -33,7 +30,6 @@ export const createWalletDepositIntent = async (req, res) => {
     let customerId = profile?.stripe_customer_id;
 
     if (!customerId) {
-      const { data: user } = await supabase.auth.admin.getUserById(userId);
       
       const customer = await stripe.customers.create({
         email: user.user.email,
@@ -46,7 +42,6 @@ export const createWalletDepositIntent = async (req, res) => {
       customerId = customer.id;
 
       // Update profile with Stripe customer ID
-      await supabase
         .from('user_profiles')
         .update({ stripe_customer_id: customerId })
         .eq('user_id', userId);
@@ -112,7 +107,6 @@ export const confirmWalletDeposit = async (req, res) => {
     }
 
     // Check if already processed
-    const { data: existingTransaction } = await supabase
       .from('transactions')
       .select('id')
       .eq('stripe_payment_intent_id', payment_intent_id)
@@ -127,7 +121,6 @@ export const confirmWalletDeposit = async (req, res) => {
     const amount = paymentIntent.amount / 100; // Convert from cents
 
     // Update user balance
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('balance')
       .eq('user_id', userId)
@@ -135,7 +128,6 @@ export const confirmWalletDeposit = async (req, res) => {
 
     const newBalance = (profile?.balance || 0) + amount;
 
-    const { error: updateError } = await supabase
       .from('user_profiles')
       .update({ balance: newBalance })
       .eq('user_id', userId);
@@ -143,7 +135,6 @@ export const confirmWalletDeposit = async (req, res) => {
     if (updateError) throw updateError;
 
     // Create transaction record
-    const { error: transactionError } = await supabase
       .from('transactions')
       .insert({
         user_id: userId,
@@ -175,7 +166,6 @@ export const createConnectAccount = async (req, res) => {
     const { country = 'US' } = req.body;
 
     // Check if user is a reader
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('stripe_account_id')
       .eq('user_id', userId)
@@ -197,7 +187,6 @@ export const createConnectAccount = async (req, res) => {
     });
 
     // Update profile with Stripe account ID
-    await supabase
       .from('user_profiles')
       .update({ stripe_account_id: account.id })
       .eq('user_id', userId);
@@ -227,7 +216,6 @@ export const getConnectAccountStatus = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('stripe_account_id')
       .eq('user_id', userId)
@@ -268,7 +256,6 @@ export const createPayout = async (req, res) => {
       });
     }
 
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('balance, stripe_account_id')
       .eq('user_id', userId)
@@ -299,13 +286,11 @@ export const createPayout = async (req, res) => {
 
     // Update reader balance
     const newBalance = profile.balance - amount;
-    await supabase
       .from('user_profiles')
       .update({ balance: newBalance })
       .eq('user_id', userId);
 
     // Create transaction record
-    await supabase
       .from('transactions')
       .insert({
         user_id: userId,
@@ -335,7 +320,6 @@ export const getTransactionHistory = async (req, res) => {
     const userId = req.user.id;
     const { limit = 20, offset = 0, type } = req.query;
 
-    let query = supabase
       .from('transactions')
       .select('*')
       .eq('user_id', userId)
@@ -417,7 +401,6 @@ const handlePaymentFailed = async (paymentIntent) => {
 
 const handleAccountUpdated = async (account) => {
   // Update reader account status in database
-  await supabase
     .from('user_profiles')
     .update({
       stripe_onboarding_complete: account.details_submitted && account.charges_enabled,
@@ -436,7 +419,6 @@ export const getPaymentMethods = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('stripe_customer_id')
       .eq('user_id', userId)
@@ -472,7 +454,6 @@ export const attachPaymentMethod = async (req, res) => {
       });
     }
 
-    const { data: profile } = await supabase
       .from('user_profiles')
       .select('stripe_customer_id')
       .eq('user_id', userId)

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { ReadingInterface } from '@/components/reading/ReadingInterface';
 
 const ReadingPage = () => {
@@ -23,13 +22,11 @@ const ReadingPage = () => {
         setError(null);
         
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           throw new Error('Not authenticated');
         }
         
         // Get user profile
-        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
@@ -39,7 +36,6 @@ const ReadingPage = () => {
         setUserProfile(profile);
         
         // Get session details
-        const { data: sessionData, error: sessionError } = await supabase
           .from('sessions')
           .select('*')
           .eq('id', sessionId)
@@ -53,7 +49,6 @@ const ReadingPage = () => {
         setIsReader(userIsReader);
         
         // Get reader profile
-        const { data: reader, error: readerError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', sessionData.reader_id)
@@ -63,7 +58,6 @@ const ReadingPage = () => {
         setReaderProfile(reader);
         
         // Get client profile
-        const { data: client, error: clientError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', sessionData.client_id)

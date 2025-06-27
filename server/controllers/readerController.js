@@ -1,6 +1,5 @@
 import { pool } from '../config/db.js';
 import { AppError } from '../middleware/errorMiddleware.js';
-import { getSupabase } from '../config/supabase.js';
 
 // @desc    Get reader profile
 // @route   GET /api/readers/:id

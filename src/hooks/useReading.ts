@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 
 type ReadingConfig = {
   sessionId?: string;
@@ -99,7 +98,6 @@ export const useReading = (config: ReadingConfig) => {
       pc.onicecandidate = async (event) => {
         if (event.candidate && sessionId) {
           // Send ICE candidate to peer via signaling server
-          await supabase.from('rtc_signals').insert([{
             session_id: sessionId,
             from_user_id: isReader ? readerId : clientId,
             to_user_id: isReader ? clientId : readerId,
@@ -198,12 +196,10 @@ export const useReading = (config: ReadingConfig) => {
         }
         
         // Create session in database
-        const { data, error } = await supabase
           .from('sessions')
           .insert([
             {
               reader_id: readerId,
-              client_id: (await supabase.auth.getUser()).data.user?.id,
               session_type: sessionType,
               rate: rate,
               status: 'pending',
@@ -251,7 +247,6 @@ export const useReading = (config: ReadingConfig) => {
       await peerConnection.setLocalDescription(offer);
       
       // Send offer to peer via signaling server
-      await supabase.from('rtc_signals').insert([{
         session_id: sessionId,
         from_user_id: isReader ? readerId : clientId,
         to_user_id: isReader ? clientId : readerId,
@@ -261,7 +256,6 @@ export const useReading = (config: ReadingConfig) => {
       }]);
       
       // Update session status
-      await supabase
         .from('sessions')
         .update({ status: 'connecting' })
         .eq('id', sessionId);
@@ -286,7 +280,6 @@ export const useReading = (config: ReadingConfig) => {
     
     const interval = setInterval(async () => {
       try {
-        const { data, error } = await supabase
           .from('rtc_signals')
           .select('*')
           .eq('session_id', sessionId)
@@ -301,7 +294,6 @@ export const useReading = (config: ReadingConfig) => {
             await handleSignal(signal);
             
             // Mark signal as processed
-            await supabase
               .from('rtc_signals')
               .update({ processed: true })
               .eq('id', signal.id);
@@ -330,7 +322,6 @@ export const useReading = (config: ReadingConfig) => {
           await peerConnection.setLocalDescription(answer);
           
           // Send answer back
-          await supabase.from('rtc_signals').insert([{
             session_id: sessionId,
             from_user_id: isReader ? readerId : clientId,
             to_user_id: isReader ? clientId : readerId,
@@ -363,7 +354,6 @@ export const useReading = (config: ReadingConfig) => {
       await peerConnection.setLocalDescription(offer);
       
       // Send offer to peer
-      await supabase.from('rtc_signals').insert([{
         session_id: sessionId,
         from_user_id: isReader ? readerId : clientId,
         to_user_id: isReader ? clientId : readerId,
@@ -383,7 +373,6 @@ export const useReading = (config: ReadingConfig) => {
       
       // Update session status
       if (sessionId) {
-        await supabase
           .from('sessions')
           .update({
             status: 'completed',
@@ -487,7 +476,6 @@ export const useReading = (config: ReadingConfig) => {
   const addFunds = useCallback(async (amount: number) => {
     try {
       // Create payment intent
-      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
         body: { amount }
       });
       

@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DollarSign, Clock, Users, Star, Phone, Video, MessageCircle, TrendingUp, Calendar, Settings } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useWebRTC } from '@/contexts/WebRTCContext';
 
@@ -82,7 +81,6 @@ const ReaderDashboard: React.FC = () => {
 
   const loadReaderData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       await Promise.all([
@@ -98,7 +96,6 @@ const ReaderDashboard: React.FC = () => {
 
   const loadProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -121,7 +118,6 @@ const ReaderDashboard: React.FC = () => {
   const loadStats = async (userId: string) => {
     try {
       // Get sessions for earnings calculation
-      const { data: sessions } = await supabase
         .from('sessions')
         .select('total_cost, created_at, duration_minutes, rating')
         .eq('reader_id', userId)
@@ -173,7 +169,6 @@ const ReaderDashboard: React.FC = () => {
 
   const loadSessions = async (userId: string) => {
     try {
-      const { data, error } = await supabase
         .from('sessions')
         .select(`
           *,
@@ -198,12 +193,10 @@ const ReaderDashboard: React.FC = () => {
 
   const toggleOnlineStatus = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const newStatus = !isOnline;
       
-      const { error } = await supabase
         .from('users')
         .update({ is_online: newStatus })
         .eq('id', user.id);
@@ -220,10 +213,8 @@ const ReaderDashboard: React.FC = () => {
 
   const updateRates = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
         .from('users')
         .update({
           chat_rate: parseFloat(rateForm.chatRate),
