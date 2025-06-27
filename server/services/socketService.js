@@ -19,7 +19,7 @@ export const initSocket = (io) => {
           return;
         }
 
-        // Verify token with Supabase
+        // Verify token with 
         
         if (error || !user || user.id !== userId) {
           socket.emit('auth_error', { error: 'Invalid authentication' });

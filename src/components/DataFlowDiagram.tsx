@@ -1,11 +1,11 @@
-// This component shows how the Supabase database maps to frontend components
+// This component shows how the  database maps to frontend components
 
 const DataFlowVisualization = () => {
   return (
     <div className="p-6 bg-black/20 rounded-lg border border-mystic-800/30">
       <h3 className="text-xl font-bold text-gradient-mystic mb-4">SoulSeer Data Flow</h3>
       <div className="text-gray-400 space-y-2 text-sm">
-        <h4 className="text-mystic-400 font-semibold">Frontend → Supabase Integration Required:</h4>
+        <h4 className="text-mystic-400 font-semibold">Frontend →  Integration Required:</h4>
         <ul className="space-y-1 ml-4">
           <li>• <strong>Authentication:</strong> Login/Signup → users table (role-based access)</li>
           <li>• <strong>Dashboard:</strong> Role-specific views → users, sessions, schedules tables</li>

@@ -112,7 +112,7 @@ const Signup = () => {
         return;
       }
 
-      // Sign up with Supabase
+      // Sign up with 
         email: formData.email,
         password: formData.password,
         options: {

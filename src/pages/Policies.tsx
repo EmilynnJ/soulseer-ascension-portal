@@ -172,7 +172,7 @@ const Policies: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-3">Third-Party Services</h3>
                   <p className="leading-relaxed">
-                    We use trusted third-party services for payment processing (Stripe), authentication (Supabase), 
+                    We use trusted third-party services for payment processing (Stripe), authentication (), 
                     and communication infrastructure. These partners maintain their own privacy policies and security standards.
                   </p>
                 </div>

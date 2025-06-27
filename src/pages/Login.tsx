@@ -46,7 +46,7 @@ const Login = () => {
         return;
       }
 
-      // Sign in with Supabase
+      // Sign in with 
         email: formData.email,
         password: formData.password,
       });

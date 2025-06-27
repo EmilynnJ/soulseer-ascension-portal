@@ -2,15 +2,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Supabase client
+// Initialize  client
 
-export const initializeSupabase = () => {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    throw new Error('Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file.');
+export const initialize = () => {
+  if (!process.env._URL || !process.env._ANON_KEY) {
+    throw new Error('Missing  configuration. Please set _URL and _ANON_KEY in your .env file.');
   }
   
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY,
+    process.env._URL,
+    process.env._ANON_KEY,
     {
       auth: {
         persistSession: false, // We'll handle sessions manually
@@ -20,15 +20,15 @@ export const initializeSupabase = () => {
   
 };
 
-// Get the Supabase client
-export const getSupabase = () => {
-    throw new Error('Supabase client has not been initialized. Call initializeSupabase() first.');
+// Get the  client
+export const get = () => {
+    throw new Error(' client has not been initialized. Call initialize() first.');
   }
 };
 
 // Auth functions
 export const signUpWithEmail = async (email, password, userData) => {
-  const { data, error } = await getSupabase().auth.signUp({
+  const { data, error } = await get().auth.signUp({
     email,
     password,
     options: {
@@ -44,7 +44,7 @@ export const signUpWithEmail = async (email, password, userData) => {
 };
 
 export const signInWithEmail = async (email, password) => {
-  const { data, error } = await getSupabase().auth.signInWithPassword({
+  const { data, error } = await get().auth.signInWithPassword({
     email,
     password,
   });
@@ -54,19 +54,19 @@ export const signInWithEmail = async (email, password) => {
 };
 
 export const signOut = async () => {
-  const { error } = await getSupabase().auth.signOut();
+  const { error } = await get().auth.signOut();
   if (error) throw error;
 };
 
 export const getCurrentUser = async (accessToken) => {
-  const { data, error } = await getSupabase().auth.getUser(accessToken);
+  const { data, error } = await get().auth.getUser(accessToken);
   if (error) throw error;
   return data.user;
 };
 
 // File upload
 export const uploadFile = async (bucket, path, file, options = {}) => {
-  const { data, error } = await getSupabase()
+  const { data, error } = await get()
     .storage
     .from(bucket)
     .upload(path, file, {
@@ -80,7 +80,7 @@ export const uploadFile = async (bucket, path, file, options = {}) => {
 };
 
 export const getPublicUrl = (bucket, path) => {
-  const { data } = getSupabase()
+  const { data } = get()
     .storage
     .from(bucket)
     .getPublicUrl(path);
@@ -90,7 +90,7 @@ export const getPublicUrl = (bucket, path) => {
 
 // Realtime subscriptions
 export const subscribeToChannel = (channel, callback) => {
-  const subscription = getSupabase()
+  const subscription = get()
     .channel(channel)
     .on('postgres_changes', { event: '*', schema: 'public' }, callback)
     .subscribe();
@@ -101,8 +101,8 @@ export const subscribeToChannel = (channel, callback) => {
 };
 
 export default {
-  initializeSupabase,
-  getSupabase,
+  initialize,
+  get,
   signUpWithEmail,
   signInWithEmail,
   signOut,

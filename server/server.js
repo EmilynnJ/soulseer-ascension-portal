@@ -18,12 +18,12 @@ import Stripe from 'stripe';
 // Load environment variables
 dotenv.config();
 
-// Initialize Supabase
+// Initialize 
 try {
-  initializeSupabase();
-  console.log('Supabase initialized successfully');
+  initialize();
+  console.log(' initialized successfully');
 } catch (error) {
-  console.error('Failed to initialize Supabase:', error);
+  console.error('Failed to initialize :', error);
   process.exit(1);
 }
 

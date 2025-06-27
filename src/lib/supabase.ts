@@ -1,6 +1,6 @@
 
 
-  throw new Error('Missing Supabase URL or Anon Key');
+  throw new Error('Missing  URL or Anon Key');
 }
 
 

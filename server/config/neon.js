@@ -9,9 +9,9 @@ const neonConfig = {
   ssl: { rejectUnauthorized: false }
 };
 
-// Create Supabase client
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+// Create  client
+  process.env._URL,
+  process.env._ANON_KEY
 );
 
 // Create Neon pool for direct SQL operations

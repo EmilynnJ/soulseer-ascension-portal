@@ -13,7 +13,7 @@ export const authMiddleware = async (req, res, next) => {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verify the JWT token with Supabase
+    // Verify the JWT token with 
 
     if (error || !user) {
       return res.status(StatusCodes.UNAUTHORIZED).json({

@@ -106,7 +106,7 @@ export const useWebRTCSession = (config: SessionConfig) => {
       // Start the call
       const offer = await webrtcService.createOffer();
       
-      // Send the offer to the reader via Supabase Realtime
+      // Send the offer to the reader via  Realtime
         .from('rtc_sessions')
         .upsert(
           {
@@ -139,7 +139,7 @@ export const useWebRTCSession = (config: SessionConfig) => {
       await webrtcService.setRemoteDescription(offer);
       const answer = await webrtcService.createAnswer();
       
-      // Send the answer back to the client via Supabase Realtime
+      // Send the answer back to the client via  Realtime
         .from('rtc_sessions')
         .update({
           reader_sdp: JSON.stringify(answer),

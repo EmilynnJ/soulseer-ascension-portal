@@ -52,7 +52,7 @@ export const signUp = async (req, res) => {
       });
     }
 
-    // Create user in Supabase Auth
+    // Create user in  Auth
       email,
       password,
       email_confirm: true, // Auto-confirm for production
@@ -63,7 +63,7 @@ export const signUp = async (req, res) => {
     });
 
     if (authError) {
-      console.error('Supabase auth error:', authError);
+      console.error(' auth error:', authError);
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         error: 'Failed to create user account'
       });
@@ -133,7 +133,7 @@ export const signIn = async (req, res) => {
       });
     }
 
-    // Sign in with Supabase
+    // Sign in with 
       email,
       password
     });
@@ -201,7 +201,7 @@ export const signOut = async (req, res) => {
         .eq('user_id', userId);
     }
 
-    // Sign out from Supabase
+    // Sign out from 
 
     if (error) {
       console.error('Sign out error:', error);
