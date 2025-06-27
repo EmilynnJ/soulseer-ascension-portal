@@ -8,22 +8,24 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+import { clerkMiddleware } from '@clerk/express';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import authRoutes from './routes/authRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { initSocket } from './services/socketService.js';
+import { initSoulSeerDatabase } from './config/neon.js';
 import Stripe from 'stripe';
 
 // Load environment variables
 dotenv.config();
 
-// Initialize 
+// Initialize database
 try {
-  initialize();
-  console.log(' initialized successfully');
+  await initSoulSeerDatabase();
+  console.log('Database initialized successfully');
 } catch (error) {
-  console.error('Failed to initialize :', error);
+  console.error('Failed to initialize database:', error);
   process.exit(1);
 }
 
@@ -81,6 +83,9 @@ app.use(cors({
 
 // Special handling for Stripe webhooks (raw body needed)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
+// Clerk middleware
+app.use(clerkMiddleware());
 
 // Standard middleware for other routes
 app.use(express.json({ limit: '10mb' }));

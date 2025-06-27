@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from 'next-themes';
+import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
 import Login from '@/pages/Login';
@@ -16,7 +17,7 @@ import ReadingInterface from '@/components/reading/ReadingInterface';
 import LiveStreamPage from '@/pages/live/LiveStreamPage';
 import NotFound from '@/pages/NotFound';
 import { WebRTCProvider } from '@/contexts/WebRTCContext';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Create a client
@@ -29,103 +30,59 @@ const queryClient = new QueryClient({
   },
 });
 
-// Auth guard component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        
-        if (error) {
-          console.error('Auth check error:', error);
-          setIsAuthenticated(false);
-        } else {
-          setIsAuthenticated(!!session);
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuth();
-    
-      async (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
-      }
-    );
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-  
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <div className="text-white text-xl font-['Playfair_Display']">
-            Loading SoulSeer...
-          </div>
-        </div>
+// Loading component
+const LoadingSpinner = () => (
+  <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+      <div className="text-white text-xl font-['Playfair_Display']">
+        Loading SoulSeer...
       </div>
-    );
-  }
-  
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
-};
+    </div>
+  </div>
+);
 
-// Public route component (redirects to dashboard if authenticated)
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+// Profile sync component
+const ProfileSync = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoaded } = useUser();
   
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        setIsAuthenticated(!!session);
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuth();
-    
-      (event, session) => {
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
-      }
-    );
-    
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    if (isLoaded && user) {
+      // Sync user profile with backend
+      const syncProfile = async () => {
+        try {
+          const response = await fetch('/api/auth/sync-profile', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await user.getToken()}`
+            },
+            body: JSON.stringify({
+              clerkId: user.id,
+              email: user.primaryEmailAddress?.emailAddress,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              imageUrl: user.imageUrl
+            })
+          });
+          
+          if (!response.ok) {
+            console.error('Failed to sync profile');
+          }
+        } catch (error) {
+          console.error('Profile sync error:', error);
+        }
+      };
+      
+      syncProfile();
+    }
+  }, [user, isLoaded]);
   
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <div className="text-white text-xl font-['Playfair_Display']">
-            Loading SoulSeer...
-          </div>
-        </div>
-      </div>
-    );
+  if (!isLoaded) {
+    return <LoadingSpinner />;
   }
   
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>;
+  return <>{children}</>;
 };
 
 function App() {
@@ -159,120 +116,122 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
         <WebRTCProvider>
-          <Router>
-            <div className="min-h-screen bg-gray-900/90 backdrop-blur-sm">
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={
-                  <Layout>
-                    <Home />
-                  </Layout>
-                } />
-                
-                <Route path="/login" element={
-                  <PublicRoute>
+          <ProfileSync>
+            <Router>
+              <div className="min-h-screen bg-gray-900/90 backdrop-blur-sm">
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/" element={
                     <Layout>
-                      <Login />
+                      <Home />
                     </Layout>
-                  </PublicRoute>
-                } />
-                
-                <Route path="/signup" element={
-                  <PublicRoute>
+                  } />
+                  
+                  <Route path="/login" element={
+                    <SignedOut>
+                      <Layout>
+                        <Login />
+                      </Layout>
+                    </SignedOut>
+                  } />
+                  
+                  <Route path="/signup" element={
+                    <SignedOut>
+                      <Layout>
+                        <Signup />
+                      </Layout>
+                    </SignedOut>
+                  } />
+                  
+                  {/* Protected routes */}
+                  <Route path="/dashboard/*" element={
+                    <SignedIn>
+                      <Layout>
+                        <Dashboard />
+                      </Layout>
+                    </SignedIn>
+                  } />
+                  
+                  {/* Reading session route (full screen) */}
+                  <Route path="/reading/:id" element={
+                    <SignedIn>
+                      <ReadingInterface />
+                    </SignedIn>
+                  } />
+                  
+                  {/* Live stream route (full screen) */}
+                  <Route path="/live/:id" element={
+                    <SignedIn>
+                      <LiveStreamPage />
+                    </SignedIn>
+                  } />
+                  
+                  {/* Reader routes */}
+                  <Route path="/readers" element={
                     <Layout>
-                      <Signup />
+                      <Readers />
                     </Layout>
-                  </PublicRoute>
-                } />
-                
-                {/* Protected routes */}
-                <Route path="/dashboard/*" element={
-                  <ProtectedRoute>
+                  } />
+                  
+                  {/* Shop routes */}
+                  <Route path="/shop" element={
                     <Layout>
-                      <Dashboard />
+                      <Shop />
                     </Layout>
-                  </ProtectedRoute>
-                } />
-                
-                {/* Reading session route (full screen) */}
-                <Route path="/reading/:id" element={
-                  <ProtectedRoute>
-                    <ReadingInterface />
-                  </ProtectedRoute>
-                } />
-                
-                {/* Live stream route (full screen) */}
-                <Route path="/live/:id" element={
-                  <ProtectedRoute>
-                    <LiveStreamPage />
-                  </ProtectedRoute>
-                } />
-                
-                {/* Reader routes */}
-                <Route path="/readers" element={
-                  <Layout>
-                    <Readers />
-                  </Layout>
-                } />
-                
-                {/* Shop routes */}
-                <Route path="/shop" element={
-                  <Layout>
-                    <Shop />
-                  </Layout>
-                } />
-                
-                {/* Live streams */}
-                <Route path="/live" element={
-                  <Layout>
-                    <Live />
-                  </Layout>
-                } />
-                
-                {/* Community routes */}
-                <Route path="/community" element={
-                  <Layout>
-                    <Community />
-                  </Layout>
-                } />
-                
-                {/* About page */}
-                <Route path="/about" element={
-                  <Layout>
-                    <About />
-                  </Layout>
-                } />
-                
-                {/* Policies page */}
-                <Route path="/policies" element={
-                  <Layout>
-                    <Policies />
-                  </Layout>
-                } />
-                
-                {/* 404 route */}
-                <Route path="*" element={
-                  <Layout>
-                    <NotFound />
-                  </Layout>
-                } />
-              </Routes>
-            </div>
-          </Router>
-          
-          {/* Toast notifications */}
-          <Toaster 
-            position="top-right" 
-            richColors 
-            theme="dark"
-            toastOptions={{
-              style: {
-                background: '#1f2937',
-                border: '1px solid #374151',
-                color: '#f9fafb',
-              },
-            }}
-          />
+                  } />
+                  
+                  {/* Live streams */}
+                  <Route path="/live" element={
+                    <Layout>
+                      <Live />
+                    </Layout>
+                  } />
+                  
+                  {/* Community routes */}
+                  <Route path="/community" element={
+                    <Layout>
+                      <Community />
+                    </Layout>
+                  } />
+                  
+                  {/* About page */}
+                  <Route path="/about" element={
+                    <Layout>
+                      <About />
+                    </Layout>
+                  } />
+                  
+                  {/* Policies page */}
+                  <Route path="/policies" element={
+                    <Layout>
+                      <Policies />
+                    </Layout>
+                  } />
+                  
+                  {/* 404 route */}
+                  <Route path="*" element={
+                    <Layout>
+                      <NotFound />
+                    </Layout>
+                  } />
+                </Routes>
+              </div>
+            </Router>
+            
+            {/* Toast notifications */}
+            <Toaster 
+              position="top-right" 
+              richColors 
+              theme="dark"
+              toastOptions={{
+                style: {
+                  background: '#1f2937',
+                  border: '1px solid #374151',
+                  color: '#f9fafb',
+                },
+              }}
+            />
+          </ProfileSync>
         </WebRTCProvider>
       </ThemeProvider>
     </QueryClientProvider>

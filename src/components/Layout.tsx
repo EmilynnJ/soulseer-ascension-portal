@@ -1,101 +1,28 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { SignedIn, SignedOut, UserButton, useUser } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
 import { 
   Menu, 
   X, 
-  User, 
-  LogOut, 
-  Settings, 
-  Wallet,
   Star,
   MessageCircle,
   Video,
   ShoppingBag,
   Users,
   Home as HomeIcon,
-  Radio
+  Radio,
+  Wallet
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url?: string;
-  role: 'client' | 'reader' | 'admin';
-  wallet_balance: number;
-}
-
 const Layout = ({ children }: LayoutProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
+  const { user } = useUser();
   const location = useLocation();
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        
-        if (session?.user) {
-          const response = await fetch('/api/auth/profile', {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-          });
-          
-          if (response.ok) {
-            const profile = await response.json();
-            setUserProfile(profile);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch user profile:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserProfile();
-
-      async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          setUserProfile(null);
-        } else if (event === 'SIGNED_IN' && session) {
-          fetchUserProfile();
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      setUserProfile(null);
-      navigate('/');
-      toast.success('Logged out successfully');
-    } catch (error) {
-      console.error('Logout error:', error);
-      toast.error('Failed to log out');
-    }
-  };
 
   const navItems = [
     { path: '/', label: 'Home', icon: HomeIcon },
@@ -105,26 +32,6 @@ const Layout = ({ children }: LayoutProps) => {
     { path: '/community', label: 'Community', icon: Users },
     { path: '/about', label: 'About', icon: MessageCircle },
   ];
-
-  const userMenuItems = userProfile ? [
-    ...(userProfile.role === 'client' ? [
-      { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
-      { path: '/dashboard/sessions', label: 'My Sessions', icon: Video },
-      { path: '/dashboard/wallet', label: 'Wallet', icon: Wallet },
-    ] : []),
-    ...(userProfile.role === 'reader' ? [
-      { path: '/dashboard', label: 'Reader Dashboard', icon: HomeIcon },
-      { path: '/dashboard/sessions', label: 'My Sessions', icon: Video },
-      { path: '/dashboard/earnings', label: 'Earnings', icon: Wallet },
-      { path: '/dashboard/schedule', label: 'Schedule', icon: Settings },
-    ] : []),
-    ...(userProfile.role === 'admin' ? [
-      { path: '/dashboard', label: 'Admin Dashboard', icon: HomeIcon },
-      { path: '/dashboard/users', label: 'Users', icon: Users },
-      { path: '/dashboard/sessions', label: 'All Sessions', icon: Video },
-      { path: '/dashboard/analytics', label: 'Analytics', icon: Settings },
-    ] : []),
-  ] : [];
 
   return (
     <div className="min-h-screen">
@@ -167,106 +74,47 @@ const Layout = ({ children }: LayoutProps) => {
 
             {/* User Menu / Auth Buttons */}
             <div className="flex items-center space-x-4">
-              {!isLoading && (
-                <>
-                  {userProfile ? (
-                    <div className="flex items-center space-x-4">
-                      {/* Wallet Balance */}
-                      <div className="hidden sm:flex items-center space-x-2 bg-gray-800/80 rounded-full px-3 py-1">
-                        <Wallet className="w-4 h-4 text-green-400" />
-                        <span className="text-sm text-green-400 font-medium">
-                          ${userProfile.wallet_balance.toFixed(2)}
-                        </span>
-                      </div>
-
-                      {/* User Dropdown */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            className="relative h-10 w-10 rounded-full"
-                          >
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage
-                                src={userProfile.avatar_url}
-                                alt={userProfile.full_name || userProfile.email}
-                              />
-                              <AvatarFallback className="bg-pink-500 text-white">
-                                {(userProfile.full_name || userProfile.email).charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-64" align="end">
-                          <DropdownMenuLabel className="p-4">
-                            <div className="flex flex-col space-y-1">
-                              <p className="text-sm font-medium text-white">
-                                {userProfile.full_name || 'User'}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {userProfile.email}
-                              </p>
-                              <div className="flex items-center space-x-2 mt-2">
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  userProfile.role === 'reader' 
-                                    ? 'bg-purple-500/20 text-purple-400'
-                                    : userProfile.role === 'admin'
-                                    ? 'bg-red-500/20 text-red-400' 
-                                    : 'bg-blue-500/20 text-blue-400'
-                                }`}>
-                                  {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
-                                </span>
-                                <div className="flex items-center space-x-1 text-green-400">
-                                  <Wallet className="w-3 h-3" />
-                                  <span className="text-xs">${userProfile.wallet_balance.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          
-                          {userMenuItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                              <DropdownMenuItem key={item.path} asChild>
-                                <Link
-                                  to={item.path}
-                                  className="flex items-center space-x-2 cursor-pointer"
-                                >
-                                  <Icon className="w-4 h-4" />
-                                  <span>{item.label}</span>
-                                </Link>
-                              </DropdownMenuItem>
-                            );
-                          })}
-                          
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={handleLogout}
-                            className="flex items-center space-x-2 cursor-pointer text-red-400"
-                          >
-                            <LogOut className="w-4 h-4" />
-                            <span>Sign out</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ) : (
-                    <div className="flex items-center space-x-4">
-                      <Link to="/login">
-                        <Button variant="ghost" className="text-gray-300 hover:text-pink-400">
-                          Sign In
-                        </Button>
-                      </Link>
-                      <Link to="/signup">
-                        <Button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700">
-                          Get Started
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-                </>
-              )}
+              <SignedIn>
+                <div className="flex items-center space-x-4">
+                  {/* Wallet Balance */}
+                  <div className="hidden sm:flex items-center space-x-2 bg-gray-800/80 rounded-full px-3 py-1">
+                    <Wallet className="w-4 h-4 text-green-400" />
+                    <span className="text-sm text-green-400 font-medium">
+                      $0.00
+                    </span>
+                  </div>
+                  
+                  {/* Clerk User Button */}
+                  <UserButton 
+                    appearance={{
+                      elements: {
+                        avatarBox: "w-10 h-10",
+                        userButtonPopoverCard: "bg-gray-800 border-gray-700",
+                        userButtonPopoverActionButton: "text-gray-300 hover:text-white hover:bg-gray-700",
+                        userButtonPopoverActionButtonText: "text-gray-300",
+                        userButtonPopoverActionButtonIcon: "text-gray-400"
+                      }
+                    }}
+                    userProfileMode="navigation"
+                    userProfileUrl="/dashboard"
+                  />
+                </div>
+              </SignedIn>
+              
+              <SignedOut>
+                <div className="flex items-center space-x-4">
+                  <Link to="/login">
+                    <Button variant="ghost" className="text-gray-300 hover:text-pink-400">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700">
+                      Get Started
+                    </Button>
+                  </Link>
+                </div>
+              </SignedOut>
 
               {/* Mobile menu button */}
               <button
@@ -304,25 +152,17 @@ const Layout = ({ children }: LayoutProps) => {
                 );
               })}
               
-              {userProfile && userMenuItems.length > 0 && (
-                <>
-                  <div className="border-t border-gray-700 my-2"></div>
-                  {userMenuItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-pink-400 hover:bg-gray-800/50"
-                      >
-                        <Icon className="w-5 h-5" />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </>
-              )}
+              <SignedIn>
+                <div className="border-t border-gray-700 my-2"></div>
+                <Link
+                  to="/dashboard"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-pink-400 hover:bg-gray-800/50"
+                >
+                  <HomeIcon className="w-5 h-5" />
+                  <span>Dashboard</span>
+                </Link>
+              </SignedIn>
             </div>
           </div>
         )}

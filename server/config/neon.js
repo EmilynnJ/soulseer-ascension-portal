@@ -5,14 +5,9 @@ dotenv.config();
 
 // Neon database configuration
 const neonConfig = {
-  connectionString: process.env.NEON_DATABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 };
-
-// Create  client
-  process.env._URL,
-  process.env._ANON_KEY
-);
 
 // Create Neon pool for direct SQL operations
 export const neonPool = new Pool(neonConfig);
@@ -35,11 +30,22 @@ export const initSoulSeerDatabase = async () => {
   try {
     await client.query('BEGIN');
     
+    // Create users table for authentication
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create enhanced profiles table with roles and psychic-specific fields
     await client.query(`
       CREATE TABLE IF NOT EXISTS profiles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+        clerk_id VARCHAR(255) UNIQUE NOT NULL,
         display_name VARCHAR(100),
         email VARCHAR(255) UNIQUE,
         profile_image TEXT,
@@ -330,7 +336,7 @@ export const initSoulSeerDatabase = async () => {
     // Create indexes for performance
     await client.query('CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_profiles_clerk_id ON profiles(clerk_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_reading_sessions_client_id ON reading_sessions(client_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_reading_sessions_reader_id ON reading_sessions(reader_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_reading_sessions_status ON reading_sessions(status)');
