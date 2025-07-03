@@ -21,6 +21,7 @@ import {
   Settings
 } from 'lucide-react';
 import { webrtcClient, SessionData, BillingUpdate } from '@/services/webrtcClient';
+import { apiClient } from '@/services/apiClient';
 import { toast } from 'sonner';
 
 interface Message {
@@ -103,56 +104,33 @@ export const ReadingInterface: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Get current user
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-      setCurrentUser(user);
-
-      // Get user profile for balance
-        .from('user_profiles')
-        .select('balance')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (profile) {
-        setBalance(profile.balance);
-      }
-
-      // Get session data
-        .from('reading_sessions')
-        .select(`
-          *,
-          reader_profile:user_profiles!reading_sessions_reader_id_fkey(*),
-          client_profile:user_profiles!reading_sessions_client_id_fkey(*)
-        `)
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionError) {
-        toast.error('Session not found');
-        navigate('/dashboard');
-        return;
-      }
-
+      // Get session data from API
+      const sessionData = await apiClient.getSession(sessionId!);
       setSession(sessionData);
       
-      // Set reader profile
-      if (sessionData.reader_profile) {
-        setReaderProfile(sessionData.reader_profile);
+      // Get user profile for balance
+      const profile = await apiClient.getProfile();
+      setCurrentUser(profile);
+      setBalance(profile.balance || 0);
+      
+      // Set reader profile from session data
+      if (sessionData.reader_name) {
+        setReaderProfile({
+          id: sessionData.reader_id,
+          full_name: sessionData.reader_name,
+          avatar_url: sessionData.reader_image,
+          bio: sessionData.bio,
+          specialties: sessionData.specialties || [],
+          rating: sessionData.rating_avg || 0,
+          total_reviews: sessionData.total_reviews || 0,
+          per_minute_rate_chat: sessionData.chat_rate || 0,
+          per_minute_rate_phone: sessionData.audio_rate || 0,
+          per_minute_rate_video: sessionData.video_rate || 0
+        });
       }
 
       // Load existing messages
       await loadMessages();
-
-      // Check if user is part of this session
-      const isParticipant = sessionData.client_id === user.id || sessionData.reader_id === user.id;
-      if (!isParticipant) {
-        toast.error('Access denied');
-        navigate('/dashboard');
-        return;
-      }
 
       // Auto-start if session is accepted
       if (sessionData.status === 'accepted') {
@@ -258,12 +236,12 @@ export const ReadingInterface: React.FC = () => {
 
   const loadMessages = async () => {
     try {
-      const messages = await webrtcClient.getSessionMessages(sessionId!);
-      setMessages(messages.map(msg => ({
+      const messages = await apiClient.getSessionMessages(sessionId!);
+      setMessages(messages.map((msg: any) => ({
         id: msg.id,
         content: msg.content,
         sender_id: msg.sender_id,
-        sender_name: msg.sender_profile?.full_name || 'Unknown',
+        sender_name: msg.sender_name || 'Unknown',
         timestamp: msg.created_at,
         type: msg.message_type || 'text'
       })));
@@ -279,16 +257,9 @@ export const ReadingInterface: React.FC = () => {
       webrtcClient.sendMessage(newMessage);
       
       // Also send via API for persistence
-      await fetch('/api/sessions/message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId,
-          content: newMessage,
-          type: 'text'
-        })
+      await apiClient.sendMessage(sessionId, {
+        content: newMessage,
+        type: 'text'
       });
 
       setNewMessage('');

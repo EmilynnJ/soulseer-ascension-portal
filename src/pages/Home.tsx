@@ -53,12 +53,8 @@ const Home = () => {
     }
   };
 
-  const handleGetStarted = async () => {
-    if (session) {
-      navigate('/dashboard');
-    } else {
-      navigate('/signup');
-    }
+  const handleGetStarted = () => {
+    navigate('/signup');
   };
 
   const features = [

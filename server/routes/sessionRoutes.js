@@ -1,151 +1,131 @@
 import express from 'express';
-import {
-  requestSession,
-  respondToSession,
-  startSession,
-  endSession,
-  sendMessage,
-  getSessionMessages,
-  getSessionHistory,
-  getActiveSessions,
-  getSessionDetails,
-  rateSession,
-  getAvailableReaders
-} from '../controllers/sessionController.js';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { requireAuth } from '@clerk/express';
+import { neonPool } from '../config/neon.js';
 import { body, param, query, validationResult } from 'express-validator';
 import { StatusCodes } from 'http-status-codes';
 
 const router = express.Router();
 
-// Validation middleware
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      error: 'Validation failed',
-      details: errors.array()
-    });
+// Get session details
+router.get('/:sessionId', requireAuth(), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const clerkId = req.auth.userId;
+    const client = await neonPool.connect();
+    
+    try {
+      const result = await client.query(
+        `SELECT rs.*, 
+                rp.display_name as reader_name, rp.profile_image as reader_image, 
+                rp.bio, rp.specialties, rp.rating_avg, rp.total_reviews,
+                cp.display_name as client_name, cp.profile_image as client_image
+         FROM reading_sessions rs
+         JOIN profiles rp ON rs.reader_id = rp.id
+         JOIN profiles cp ON rs.client_id = cp.id
+         WHERE rs.id = $1 AND (rp.clerk_id = $2 OR cp.clerk_id = $2)`,
+        [sessionId, clerkId]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(StatusCodes.NOT_FOUND).json({ error: 'Session not found' });
+      }
+      
+      res.json(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get session error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to get session' });
   }
-  next();
-};
-
-// Request a new reading session
-router.post('/request',
-  authMiddleware,
-  [
-    body('readerId').isUUID().withMessage('Reader ID must be a valid UUID'),
-    body('sessionType').isIn(['chat', 'audio', 'video']).withMessage('Session type must be chat, audio, or video'),
-    body('ratePerMinute').isInt({ min: 1 }).withMessage('Rate per minute must be a positive integer')
-  ],
-  handleValidationErrors,
-  requestSession
-);
-
-// Respond to session request (for readers)
-router.post('/respond',
-  authMiddleware,
-  [
-    body('sessionId').isUUID().withMessage('Session ID must be a valid UUID'),
-    body('response').isIn(['accept', 'reject']).withMessage('Response must be accept or reject')
-  ],
-  handleValidationErrors,
-  respondToSession
-);
-
-// Start a reading session
-router.post('/start',
-  authMiddleware,
-  [
-    body('sessionId').isUUID().withMessage('Session ID must be a valid UUID')
-  ],
-  handleValidationErrors,
-  startSession
-);
-
-// End a reading session
-router.post('/end',
-  authMiddleware,
-  [
-    body('sessionId').isUUID().withMessage('Session ID must be a valid UUID')
-  ],
-  handleValidationErrors,
-  endSession
-);
-
-// Send message in session
-router.post('/message',
-  authMiddleware,
-  [
-    body('sessionId').isUUID().withMessage('Session ID must be a valid UUID'),
-    body('content').isLength({ min: 1, max: 1000 }).withMessage('Content must be between 1 and 1000 characters'),
-    body('type').optional().isIn(['text', 'image', 'file']).withMessage('Type must be text, image, or file')
-  ],
-  handleValidationErrors,
-  sendMessage
-);
+});
 
 // Get session messages
-router.get('/:sessionId/messages',
-  authMiddleware,
-  [
-    param('sessionId').isUUID().withMessage('Session ID must be a valid UUID')
-  ],
-  handleValidationErrors,
-  getSessionMessages
-);
+router.get('/:sessionId/messages', requireAuth(), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const client = await neonPool.connect();
+    
+    try {
+      const result = await client.query(
+        `SELECT m.*, p.display_name as sender_name
+         FROM messages m
+         JOIN profiles p ON m.sender_id = p.id
+         WHERE m.session_id = $1
+         ORDER BY m.created_at ASC`,
+        [sessionId]
+      );
+      
+      res.json(result.rows);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to get messages' });
+  }
+});
 
-// Get session history
-router.get('/history',
-  authMiddleware,
-  [
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-    query('offset').optional().isInt({ min: 0 }).withMessage('Offset must be non-negative')
-  ],
-  handleValidationErrors,
-  getSessionHistory
-);
+// Send message
+router.post('/:sessionId/messages', requireAuth(), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { content, type = 'text' } = req.body;
+    const clerkId = req.auth.userId;
+    const client = await neonPool.connect();
+    
+    try {
+      // Get sender profile
+      const profileResult = await client.query(
+        'SELECT id FROM profiles WHERE clerk_id = $1',
+        [clerkId]
+      );
+      
+      if (profileResult.rows.length === 0) {
+        return res.status(StatusCodes.NOT_FOUND).json({ error: 'Profile not found' });
+      }
+      
+      const senderId = profileResult.rows[0].id;
+      
+      // Insert message
+      const result = await client.query(
+        `INSERT INTO messages (session_id, sender_id, content, message_type)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [sessionId, senderId, content, type]
+      );
+      
+      res.status(StatusCodes.CREATED).json(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to send message' });
+  }
+});
 
-// Get active sessions
-router.get('/active',
-  authMiddleware,
-  getActiveSessions
-);
-
-// Get session details
-router.get('/:sessionId',
-  authMiddleware,
-  [
-    param('sessionId').isUUID().withMessage('Session ID must be a valid UUID')
-  ],
-  handleValidationErrors,
-  getSessionDetails
-);
-
-// Rate a completed session
-router.post('/:sessionId/rate',
-  authMiddleware,
-  [
-    param('sessionId').isUUID().withMessage('Session ID must be a valid UUID'),
-    body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
-    body('review').optional().isLength({ max: 500 }).withMessage('Review must be 500 characters or less')
-  ],
-  handleValidationErrors,
-  rateSession
-);
-
-// Get available readers
-router.get('/readers/available',
-  authMiddleware,
-  [
-    query('specialty').optional().isString().withMessage('Specialty must be a string'),
-    query('sortBy').optional().isIn(['rating', 'total_reviews', 'per_minute_rate_chat']).withMessage('Invalid sort field'),
-    query('order').optional().isIn(['asc', 'desc']).withMessage('Order must be asc or desc'),
-    query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
-    query('offset').optional().isInt({ min: 0 }).withMessage('Offset must be non-negative')
-  ],
-  handleValidationErrors,
-  getAvailableReaders
-);
+// Update billing
+router.post('/billing', requireAuth(), async (req, res) => {
+  try {
+    const { session_id, event_type, duration_seconds, amount_billed, client_balance_before, client_balance_after, metadata } = req.body;
+    const client = await neonPool.connect();
+    
+    try {
+      await client.query(
+        `INSERT INTO billing_transactions (session_id, amount, transaction_type, status, billing_interval_start, billing_interval_end, minutes_billed, metadata)
+         VALUES ($1, $2, $3, $4, NOW() - INTERVAL '${duration_seconds} seconds', NOW(), $5, $6)`,
+        [session_id, amount_billed, 'session_payment', 'succeeded', Math.floor(duration_seconds / 60), metadata]
+      );
+      
+      res.json({ success: true });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Billing update error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to update billing' });
+  }
+});
 
 export default router;

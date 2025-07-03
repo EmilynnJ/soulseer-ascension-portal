@@ -1,108 +1,161 @@
 import express from 'express';
-import {
-  createWalletDepositIntent,
-  confirmWalletDeposit,
-  createConnectAccount,
-  getConnectAccountStatus,
-  createPayout,
-  getTransactionHistory,
-  handleWebhook,
-  getPaymentMethods,
-  attachPaymentMethod
-} from '../controllers/paymentController.js';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { requireAuth } from '@clerk/express';
+import { neonPool } from '../config/neon.js';
 import { body, query, validationResult } from 'express-validator';
 import { StatusCodes } from 'http-status-codes';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
 
-// Validation middleware
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      error: 'Validation failed',
-      details: errors.array()
+// Create Stripe Checkout session for adding funds
+router.post('/create-checkout', requireAuth(), async (req, res) => {
+  try {
+    const { amount } = req.body; // Amount in cents
+    const clerkId = req.auth.userId;
+    
+    if (!amount || amount < 100) { // Minimum $1.00
+      return res.status(StatusCodes.BAD_REQUEST).json({ error: 'Invalid amount' });
+    }
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'SoulSeer Wallet Credit',
+              description: 'Add funds to your SoulSeer wallet',
+            },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/dashboard?payment=success`,
+      cancel_url: `${process.env.FRONTEND_URL}/dashboard?payment=cancelled`,
+      metadata: {
+        clerk_id: clerkId,
+        type: 'wallet_deposit'
+      }
     });
+    
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to create checkout session' });
   }
-  next();
-};
+});
 
-// Webhook endpoint (no auth required)
-router.post('/webhook', express.raw({ type: 'application/json' }), handleWebhook);
+// Stripe webhook handler
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SIGNING_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        if (session.metadata?.type === 'wallet_deposit') {
+          await handleWalletDeposit(session);
+        }
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook handler error:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
 
-// Create wallet deposit payment intent
-router.post('/wallet-deposit/intent',
-  authMiddleware,
-  [
-    body('amount').isFloat({ min: 1, max: 500 }).withMessage('Amount must be between $1 and $500')
-  ],
-  handleValidationErrors,
-  createWalletDepositIntent
-);
+// Handle successful wallet deposit
+async function handleWalletDeposit(session) {
+  const client = await neonPool.connect();
+  try {
+    const clerkId = session.metadata.clerk_id;
+    const amount = session.amount_total; // Amount in cents
+    
+    // Get user profile
+    const profileResult = await client.query(
+      'SELECT id, balance FROM profiles WHERE clerk_id = $1',
+      [clerkId]
+    );
+    
+    if (profileResult.rows.length === 0) {
+      throw new Error('Profile not found');
+    }
+    
+    const profile = profileResult.rows[0];
+    const newBalance = (profile.balance || 0) + (amount / 100); // Convert to dollars
+    
+    // Update balance
+    await client.query(
+      'UPDATE profiles SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newBalance, profile.id]
+    );
+    
+    // Record transaction
+    await client.query(
+      `INSERT INTO billing_transactions (user_id, amount, currency, transaction_type, status, stripe_payment_intent_id, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [profile.id, amount, 'USD', 'wallet_deposit', 'succeeded', session.payment_intent, 'Wallet deposit via Stripe']
+    );
+    
+    console.log(`Wallet deposit completed for user ${clerkId}: $${amount / 100}`);
+  } finally {
+    client.release();
+  }
+}
 
-// Confirm wallet deposit
-router.post('/wallet-deposit/confirm',
-  authMiddleware,
-  [
-    body('payment_intent_id').isString().notEmpty().withMessage('Payment intent ID is required')
-  ],
-  handleValidationErrors,
-  confirmWalletDeposit
-);
-
-// Create Stripe Connect account for readers
-router.post('/connect/create',
-  authMiddleware,
-  [
-    body('country').optional().isString().isLength({ min: 2, max: 2 }).withMessage('Country must be a 2-letter country code')
-  ],
-  handleValidationErrors,
-  createConnectAccount
-);
-
-// Get Stripe Connect account status
-router.get('/connect/status',
-  authMiddleware,
-  getConnectAccountStatus
-);
-
-// Create payout for readers
-router.post('/payout',
-  authMiddleware,
-  [
-    body('amount').isFloat({ min: 15 }).withMessage('Minimum payout amount is $15')
-  ],
-  handleValidationErrors,
-  createPayout
-);
-
-// Get transaction history
-router.get('/transactions',
-  authMiddleware,
-  [
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-    query('offset').optional().isInt({ min: 0 }).withMessage('Offset must be non-negative'),
-    query('type').optional().isIn(['wallet_deposit', 'session_payment', 'payout', 'refund']).withMessage('Invalid transaction type')
-  ],
-  handleValidationErrors,
-  getTransactionHistory
-);
-
-// Get payment methods
-router.get('/payment-methods',
-  authMiddleware,
-  getPaymentMethods
-);
-
-// Attach payment method to customer
-router.post('/payment-methods/attach',
-  authMiddleware,
-  [
-    body('payment_method_id').isString().notEmpty().withMessage('Payment method ID is required')
-  ],
-  handleValidationErrors,
-  attachPaymentMethod
-);
+// Get payment history
+router.get('/history', requireAuth(), async (req, res) => {
+  try {
+    const clerkId = req.auth.userId;
+    const client = await neonPool.connect();
+    
+    try {
+      // Get user profile
+      const profileResult = await client.query(
+        'SELECT id FROM profiles WHERE clerk_id = $1',
+        [clerkId]
+      );
+      
+      if (profileResult.rows.length === 0) {
+        return res.json([]);
+      }
+      
+      const profile = profileResult.rows[0];
+      
+      // Get transaction history
+      const transactionsResult = await client.query(
+        `SELECT * FROM billing_transactions 
+         WHERE user_id = $1 
+         ORDER BY created_at DESC 
+         LIMIT 50`,
+        [profile.id]
+      );
+      
+      res.json(transactionsResult.rows);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Payment history error:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: 'Failed to get payment history' });
+  }
+});
 
 export default router;

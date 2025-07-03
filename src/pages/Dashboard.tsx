@@ -1,58 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useUser } from '@clerk/clerk-react';
 import AdminDashboard from './dashboard/AdminDashboard';
 import ReaderDashboard from './dashboard/ReaderDashboard';
 import ClientDashboard from './dashboard/ClientDashboard';
+import { apiClient } from '@/services/apiClient';
 
-interface User {
+interface UserProfile {
   id: string;
   email: string;
   role: 'client' | 'reader' | 'admin';
-  first_name?: string;
-  last_name?: string;
-  wallet_balance?: number;
+  display_name?: string;
+  balance?: number;
 }
 
 const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
+  const { user: clerkUser, isLoaded } = useUser();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadUserData();
-  }, []);
+    if (isLoaded && clerkUser) {
+      loadUserProfile();
+    } else if (isLoaded && !clerkUser) {
+      setLoading(false);
+    }
+  }, [isLoaded, clerkUser]);
 
-  const loadUserData = async () => {
+  const loadUserProfile = async () => {
     try {
-      if (!authUser) {
-        navigate('/login');
-        return;
-      }
-
-      // Get user profile
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (error) {
-        console.error('Error loading user profile:', error);
-        navigate('/login');
-        return;
-      }
-
-      if (profile) {
-        setUser(profile);
-      }
+      const userProfile = await apiClient.getProfile();
+      setProfile(userProfile.profile);
     } catch (error) {
-      console.error('Error loading user data:', error);
-      navigate('/login');
+      console.error('Error loading user profile:', error);
+      // If profile doesn't exist, default to client role
+      setProfile({
+        id: clerkUser?.id || '',
+        email: clerkUser?.primaryEmailAddress?.emailAddress || '',
+        role: 'client',
+        display_name: `${clerkUser?.firstName || ''} ${clerkUser?.lastName || ''}`.trim(),
+        balance: 0
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  if (!isLoaded || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-pink-900 flex items-center justify-center">
         <div className="text-center">
@@ -65,48 +58,31 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (!user) {
+  if (!clerkUser || !profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-pink-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-white text-xl font-['Playfair_Display'] mb-4">
-            Please sign in to access your dashboard
+            Welcome to SoulSeer!
           </div>
-          <button 
-            onClick={() => navigate('/login')}
-            className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
-          >
-            Sign In
-          </button>
+          <p className="text-gray-300 mb-6">
+            Setting up your profile...
+          </p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto"></div>
         </div>
       </div>
     );
   }
 
   // Route to role-specific dashboard
-  switch (user.role) {
+  switch (profile.role) {
     case 'admin':
       return <AdminDashboard />;
     case 'reader':
       return <ReaderDashboard />;
     case 'client':
-      return <ClientDashboard />;
     default:
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-pink-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-white text-xl font-['Playfair_Display'] mb-4">
-              Invalid user role
-            </div>
-            <button 
-              onClick={() => navigate('/login')}
-              className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
-            >
-              Sign In
-            </button>
-          </div>
-        </div>
-      );
+      return <ClientDashboard />;
   }
 };
 

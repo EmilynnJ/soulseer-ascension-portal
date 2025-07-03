@@ -3,6 +3,7 @@ import { formatTime, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/services/apiClient';
 
 type BillingTimerProps = {
   sessionId: string;
@@ -35,21 +36,18 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   // Update billing in the database
   const updateBilling = async (durationSec: number, amount: number) => {
     try {
-        {
-          session_id: sessionId,
-          event_type: 'tick',
-          duration_seconds: durationSec,
-          amount_billed: amount,
-          client_balance_before: balance + amount,
-          client_balance_after: balance,
-          metadata: {
-            rate_per_minute: ratePerMinute,
-            cost_per_second: costPerSecond,
-          },
+      await apiClient.updateBilling({
+        session_id: sessionId,
+        event_type: 'tick',
+        duration_seconds: durationSec,
+        amount_billed: amount,
+        client_balance_before: balance + amount,
+        client_balance_after: balance,
+        metadata: {
+          rate_per_minute: ratePerMinute,
+          cost_per_second: costPerSecond,
         },
-      ]);
-      
-      if (error) throw error;
+      });
     } catch (error) {
       console.error('Error updating billing:', error);
       // We'll continue the session even if billing update fails
@@ -60,11 +58,7 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   // Update user balance in the database
   const updateUserBalance = async (newBalance: number) => {
     try {
-        .from('profiles')
-        .update({ balance: newBalance })
-      
-      if (error) throw error;
-      
+      await apiClient.updateProfile({ balance: newBalance });
       return true;
     } catch (error) {
       console.error('Error updating user balance:', error);
@@ -150,10 +144,7 @@ export const BillingTimer: React.FC<BillingTimerProps> = ({
   const handleAddFunds = async () => {
     try {
       // Create a Stripe Checkout session
-        body: { amount: 2000 }, // $20.00 in cents
-      });
-      
-      if (error) throw error;
+      const data = await apiClient.createCheckoutSession(2000); // $20.00 in cents
       
       // Redirect to Stripe Checkout
       window.location.href = data.url;

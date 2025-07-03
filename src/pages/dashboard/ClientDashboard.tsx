@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DollarSign, Clock, Heart, Star, Phone, Video, MessageCircle, CreditCard, History, User, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { apiClient } from '@/services/apiClient';
 
 interface ClientStats {
   totalSpent: number;
@@ -58,6 +60,7 @@ interface ClientProfile {
 }
 
 const ClientDashboard: React.FC = () => {
+  const { user: clerkUser } = useUser();
   const navigate = useNavigate();
   const [stats, setStats] = useState<ClientStats>({
     totalSpent: 0,
@@ -74,138 +77,49 @@ const ClientDashboard: React.FC = () => {
   const [addFundsAmount, setAddFundsAmount] = useState('');
 
   useEffect(() => {
-    loadClientData();
-  }, []);
+    if (clerkUser) {
+      loadClientData();
+    }
+  }, [clerkUser]);
 
   const loadClientData = async () => {
     try {
-      if (!user) return;
-
-      await Promise.all([
-        loadProfile(user.id),
-        loadStats(user.id),
-        loadSessions(user.id),
-        loadFavoriteReaders(user.id)
-      ]);
+      const dashboardData = await apiClient.getDashboardData('client');
+      setStats(dashboardData.stats || {
+        totalSpent: 0,
+        totalSessions: 0,
+        favoriteReaders: 0,
+        monthlySpent: 0,
+        averageSessionLength: 0,
+        walletBalance: 0
+      });
+      setSessions(dashboardData.sessions || []);
+      setFavoriteReaders(dashboardData.favoriteReaders || []);
+      
+      const userProfile = await apiClient.getProfile();
+      setProfile({
+        id: userProfile.profile?.id || '',
+        first_name: clerkUser?.firstName || '',
+        last_name: clerkUser?.lastName || '',
+        email: clerkUser?.primaryEmailAddress?.emailAddress || '',
+        wallet_balance: userProfile.profile?.balance || 0,
+        created_at: clerkUser?.createdAt?.toString() || ''
+      });
     } catch (error) {
       console.error('Error loading client data:', error);
-      toast.error('Failed to load dashboard data');
+      // Set default profile if API fails
+      setProfile({
+        id: clerkUser?.id || '',
+        first_name: clerkUser?.firstName || '',
+        last_name: clerkUser?.lastName || '',
+        email: clerkUser?.primaryEmailAddress?.emailAddress || '',
+        wallet_balance: 0,
+        created_at: clerkUser?.createdAt?.toString() || ''
+      });
     }
   };
 
-  const loadProfile = async (userId: string) => {
-    try {
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
 
-      if (error) throw error;
-      setProfile(data);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
-  };
-
-  const loadStats = async (userId: string) => {
-    try {
-      // Get sessions for stats calculation
-        .from('sessions')
-        .select('total_cost, created_at, duration_minutes')
-        .eq('client_id', userId)
-        .eq('status', 'completed');
-
-      // Get wallet balance
-        .from('users')
-        .select('wallet_balance')
-        .eq('id', userId)
-        .single();
-
-      if (sessions) {
-        const totalSpent = sessions.reduce((sum, session) => sum + (session.total_cost || 0), 0);
-        
-        const monthStart = new Date();
-        monthStart.setDate(monthStart.getDate() - 30);
-        const monthlySpent = sessions
-          .filter(s => new Date(s.created_at) >= monthStart)
-          .reduce((sum, session) => sum + (session.total_cost || 0), 0);
-
-        const totalMinutes = sessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
-        const averageSessionLength = sessions.length > 0 ? totalMinutes / sessions.length : 0;
-
-        setStats({
-          totalSpent,
-          totalSessions: sessions.length,
-          favoriteReaders: 0, // Will be updated when loading favorites
-          monthlySpent,
-          averageSessionLength,
-          walletBalance: profile?.wallet_balance || 0
-        });
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  const loadSessions = async (userId: string) => {
-    try {
-        .from('sessions')
-        .select(`
-          *,
-          reader:users!sessions_reader_id_fkey(first_name, last_name, username, profile_image)
-        `)
-        .eq('client_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      
-      const formattedSessions = data?.map(session => ({
-        ...session,
-        reader_name: `${session.reader?.first_name || ''} ${session.reader?.last_name || ''}`.trim() || 'Unknown',
-        reader_username: session.reader?.username || '',
-        reader_profile_image: session.reader?.profile_image || ''
-      })) || [];
-      
-      setSessions(formattedSessions);
-    } catch (error) {
-      console.error('Error loading sessions:', error);
-    }
-  };
-
-  const loadFavoriteReaders = async (userId: string) => {
-    try {
-      // Get favorite readers (simplified - would need proper favorites table)
-        .from('sessions')
-        .select('reader_id')
-        .eq('client_id', userId)
-        .eq('status', 'completed');
-
-      if (favoriteSessions) {
-        // Get most frequent readers
-        const readerCounts = favoriteSessions.reduce((acc, session) => {
-          acc[session.reader_id] = (acc[session.reader_id] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-        const topReaderIds = Object.entries(readerCounts)
-          .sort(([,a], [,b]) => b - a)
-          .slice(0, 5)
-          .map(([readerId]) => readerId);
-
-        if (topReaderIds.length > 0) {
-            .from('users')
-            .select('*')
-            .in('id', topReaderIds)
-            .eq('role', 'reader');
-
-          setFavoriteReaders(readers || []);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading favorite readers:', error);
-    }
-  };
 
   const addFunds = async () => {
     try {
@@ -215,23 +129,8 @@ const ClientDashboard: React.FC = () => {
         return;
       }
 
-      // This would integrate with Stripe for actual payment processing
-      // For now, we'll simulate adding funds
-      if (!user) return;
-
-        .from('users')
-        .update({ 
-          wallet_balance: (profile?.wallet_balance || 0) + amount 
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      toast.success(`Successfully added ${formatCurrency(amount)} to your wallet`);
-      setIsAddFundsOpen(false);
-      setAddFundsAmount('');
-      loadProfile(user.id);
-      loadStats(user.id);
+      const data = await apiClient.createCheckoutSession(amount * 100); // Convert to cents
+      window.location.href = data.url;
     } catch (error) {
       console.error('Error adding funds:', error);
       toast.error('Failed to add funds');

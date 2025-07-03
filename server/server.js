@@ -13,6 +13,7 @@ import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import authRoutes from './routes/authRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 import { initSocket } from './services/socketService.js';
 import { initSoulSeerDatabase } from './config/neon.js';
 import Stripe from 'stripe';
@@ -26,7 +27,11 @@ try {
   console.log('Database initialized successfully');
 } catch (error) {
   console.error('Failed to initialize database:', error);
-  process.exit(1);
+  console.log('Continuing without database initialization...');
+  // Don't exit in development - allow server to start
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 }
 
 // Initialize Express app
@@ -128,6 +133,7 @@ app.use('/uploads', express.static(join(__dirname, 'public/uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
