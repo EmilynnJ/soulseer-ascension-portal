@@ -109,13 +109,16 @@ router.post('/:sessionId/messages', requireAuth(), async (req, res) => {
 router.post('/billing', requireAuth(), async (req, res) => {
   try {
     const { session_id, event_type, duration_seconds, amount_billed, client_balance_before, client_balance_after, metadata } = req.body;
+    if (!Number.isInteger(duration_seconds) || duration_seconds <= 0) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ error: 'Invalid duration_seconds' });
+    }
     const client = await neonPool.connect();
     
     try {
       await client.query(
         `INSERT INTO billing_transactions (session_id, amount, transaction_type, status, billing_interval_start, billing_interval_end, minutes_billed, metadata)
-         VALUES ($1, $2, $3, $4, NOW() - INTERVAL '${duration_seconds} seconds', NOW(), $5, $6)`,
-        [session_id, amount_billed, 'session_payment', 'succeeded', Math.floor(duration_seconds / 60), metadata]
+         VALUES ($1, $2, $3, $4, NOW() - INTERVAL $7 * INTERVAL '1 second', NOW(), $5, $6)`,
+        [session_id, amount_billed, 'session_payment', 'succeeded', Math.floor(duration_seconds / 60), metadata, duration_seconds]
       );
       
       res.json({ success: true });
